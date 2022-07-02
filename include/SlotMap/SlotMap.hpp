@@ -23,15 +23,33 @@ concept HasReserve = requires (C c) {
     c.reserve(std::declval<typename C::size_type>());
 };
 
+template<typename SlotMap>
+concept SlotMapHasReserve =
+    HasReserve<typename SlotMap::ObjC> and
+    HasReserve<typename SlotMap::IdxC> and
+    HasReserve<typename SlotMap::KeyC>;
+
 template<typename C>
 concept HasCapacity = requires (C c) {
     c.capacity();
 };
 
+template<typename SlotMap>
+concept SlotMapHasCapacity =
+    HasCapacity<typename SlotMap::ObjC> and
+    HasCapacity<typename SlotMap::IdxC> and
+    HasCapacity<typename SlotMap::KeyC>;
+
 template<typename C>
 concept HasShrinkToFit = requires (C c) {
     c.shrink_to_fit();
 };
+
+template<typename SlotMap>
+concept SlotMapHasShrinkToFit =
+    HasShrinkToFit<typename SlotMap::ObjC> and
+    HasShrinkToFit<typename SlotMap::IdxC> and
+    HasShrinkToFit<typename SlotMap::KeyC>;
 }
 
 template<
@@ -43,24 +61,22 @@ class SlotMap {
     static constexpr auto idx_bits = IndexBits;
     static constexpr auto gen_bits = GenerationBits;
     using Key       = Detail::Key<idx_bits, gen_bits>;
-    using IndexT    = typename Key::index_type;
-    static constexpr IndexT free_list_null = Key::max_index;
+    using IdxT    = typename Key::index_type;
+    static constexpr IdxT free_list_null = Key::max_index;
 
-    using ObjectContainer   = std::vector<T>;
-    using IndexContainer    = std::vector<Key>;
-    using KeyContainer      = std::vector<IndexT>;
+    using ObjC  = std::vector<T>;
+    using IdxC  = std::vector<Key>;
+    using KeyC  = std::vector<IdxT>;
 
-    ObjectContainer objects;
-    IndexContainer  indices;
-    KeyContainer    keys;
-
-    // TODO: how to determine list end?
-    IndexT              free_list_head = free_list_null;
+    ObjC objects;
+    IdxC indices;
+    KeyC keys;
+    IdxT free_list_head = free_list_null;
 
 public:
-    using const_iterator    = ObjectContainer::const_iterator;
-    using iterator          = ObjectContainer::iterator;
-    using size_type         = IndexT;
+    using const_iterator    = ObjC::const_iterator;
+    using iterator          = ObjC::iterator;
+    using size_type         = IdxT;
     using value_type        = T;
     using key_type          = Key;
 
@@ -74,20 +90,11 @@ public:
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr size_type size() const noexcept { return std::distance(begin(), end()); }
     constexpr size_type max_size() const noexcept { return Key::max_index - 1; }
-    template<typename = void> requires
-        Detail::HasReserve<ObjectContainer> and
-        Detail::HasReserve<IndexContainer> and
-        Detail::HasReserve<KeyContainer>
+    template<Detail::SlotMapHasReserve = SlotMap>
     constexpr void reserve(size_type sz);
-    template<typename = void> requires
-        Detail::HasCapacity<ObjectContainer> and
-        Detail::HasCapacity<IndexContainer> and
-        Detail::HasCapacity<KeyContainer>
+    template<Detail::SlotMapHasCapacity = SlotMap>
     constexpr size_type capacity() const noexcept;
-    template<typename = void> requires
-        Detail::HasShrinkToFit<ObjectContainer> and
-        Detail::HasShrinkToFit<IndexContainer> and
-        Detail::HasShrinkToFit<KeyContainer>
+    template<Detail::SlotMapHasShrinkToFit = SlotMap>
     constexpr void shrink_to_fit();
 
     constexpr void clear() noexcept;
@@ -112,7 +119,7 @@ public:
 template<typename T, unsigned I, unsigned G>
 constexpr auto SlotMap<T, I, G>::insert(const T& val) -> key_type {
     if (free_list_head == free_list_null) {
-        IndexT idx = indices.size();
+        IdxT idx = indices.size();
         objects.push_back(val);
         keys.push_back(idx);
         indices.push_back({.idx = idx});
@@ -122,7 +129,7 @@ constexpr auto SlotMap<T, I, G>::insert(const T& val) -> key_type {
     } else {
         auto& [gen, next] = indices[free_list_head];
         auto idx = free_list_head;
-        IndexT obj_idx = objects.size();
+        IdxT obj_idx = objects.size();
         objects.push_back(val);
         keys.push_back(idx);
         free_list_head = next;
@@ -170,10 +177,7 @@ constexpr void SlotMap<T, I, G>::erase(SlotMap::iterator it) noexcept {
 }
 
 template<typename T, unsigned I, unsigned G>
-template<typename> requires
-    Detail::HasReserve<typename SlotMap<T, I, G>::ObjectContainer> and
-    Detail::HasReserve<typename SlotMap<T, I, G>::IndexContainer> and
-    Detail::HasReserve<typename SlotMap<T, I, G>::KeyContainer>
+template<Detail::SlotMapHasReserve>
 constexpr void SlotMap<T, I, G>::reserve(size_type sz) {
     objects.reserve(sz);
     indices.reserve(sz);
@@ -181,10 +185,7 @@ constexpr void SlotMap<T, I, G>::reserve(size_type sz) {
 }
 
 template<typename T, unsigned I, unsigned G>
-template<typename> requires
-    Detail::HasCapacity<typename SlotMap<T, I, G>::ObjectContainer> and
-    Detail::HasCapacity<typename SlotMap<T, I, G>::IndexContainer> and
-    Detail::HasCapacity<typename SlotMap<T, I, G>::KeyContainer>
+template<Detail::SlotMapHasCapacity>
 constexpr auto SlotMap<T, I, G>::capacity() const noexcept -> size_type {
     auto cap = max_size();
     auto obj_cap = objects.capacity();
@@ -203,10 +204,7 @@ constexpr auto SlotMap<T, I, G>::capacity() const noexcept -> size_type {
 }
 
 template<typename T, unsigned I, unsigned G>
-template<typename> requires
-    Detail::HasShrinkToFit<typename SlotMap<T, I, G>::ObjectContainer> and
-    Detail::HasShrinkToFit<typename SlotMap<T, I, G>::IndexContainer> and
-    Detail::HasShrinkToFit<typename SlotMap<T, I, G>::KeyContainer>
+template<Detail::SlotMapHasShrinkToFit>
 constexpr void SlotMap<T, I, G>::shrink_to_fit() {
     objects.shrink_to_fit();
     indices.shrink_to_fit();
