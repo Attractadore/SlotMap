@@ -139,8 +139,8 @@ template<
 > requires Detail::SlotMapRequires<T, IdxBits, GenBits, ObjectContainer, KeyContainer>
 class SlotMap {
     using Key   = Detail::Key<IdxBits, GenBits>;
-    using IdxT  = typename Key::idx_type;
-    using GenT  = typename Key::gen_type;
+    using IdxT  = Key::idx_type;
+    using GenT  = Key::gen_type;
 
     using ObjC  = ObjectContainer<T>;
     using IdxC  = KeyContainer<Key>;
@@ -158,8 +158,8 @@ public:
     using value_type        = T;
     using const_reference   = const T&;
     using reference         = T&;
-    using const_iterator    = typename ObjC::const_iterator;
-    using iterator          = typename ObjC::iterator;
+    using const_iterator    = ObjC::const_iterator;
+    using iterator          = ObjC::iterator;
     using size_type         = IdxT;
     using emplace_result    = Detail::EmplaceResult<key_type, value_type>;
 
