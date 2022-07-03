@@ -107,7 +107,16 @@ concept SlotMapRequires =
     std::is_nothrow_move_constructible_v<T> and
     (IdxBits + GenBits <= 64) and
     (IdxBits > 0) and
-    (GenBits > 0);
+    (GenBits > 0) and
+    requires (ObjectContainer<T> c) {
+        { std::ranges::swap(c, c) } noexcept;
+    } and
+    requires (KeyContainer<typename Detail::Key<IdxBits, GenBits>> c) {
+        { std::ranges::swap(c, c) } noexcept;
+    } and
+    requires (KeyContainer<typename Detail::Key<IdxBits, GenBits>::idx_type> c) {
+        { std::ranges::swap(c, c) } noexcept;
+    };
 
 template<typename T>
 using StdVector = std::vector<T>;
@@ -127,7 +136,7 @@ template<
     unsigned IdxBits = 24,
     unsigned GenBits = 8,
     template <typename> typename ObjectContainer = Detail::StdVector,
-    template <typename> typename KeyContainer = Detail::StdVector
+    template <typename> typename KeyContainer    = Detail::StdVector
 > requires Detail::SlotMapRequires<T, IdxBits, GenBits, ObjectContainer, KeyContainer>
 class SlotMap {
     using Key   = Detail::Key<IdxBits, GenBits>;
