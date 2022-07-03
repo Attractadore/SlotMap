@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.12)
 project(SlotMap LANGUAGES CXX)
 
 add_library(SlotMap INTERFACE include/SlotMap/SlotMap.hpp)
