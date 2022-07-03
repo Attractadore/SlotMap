@@ -178,6 +178,28 @@ TEST(TestErase, EraseIterator) {
     EXPECT_EQ(s.find(k), s.end());
 }
 
+TEST(TestErase, EraseAllIterator) {
+    SlotMap<int> s;
+    std::vector values = {0, 1, 2, 3, 4};
+    for (auto v: values) {
+        auto k = s.insert(v);
+    }
+    for (auto it = s.begin(); it != s.end();) {
+        it = s.erase(it);
+    }
+}
+
+TEST(TestErase, EraseAllIteratorBackward) {
+    SlotMap<int> s;
+    std::vector values = {0, 1, 2, 3, 4};
+    for (auto v: values) {
+        auto k = s.insert(v);
+    }
+    while(not s.empty()) {
+        s.erase(s.end() - 1);
+    }
+}
+
 TEST(TestErase, EraseKey) {
     SlotMap<int> s;
 

@@ -247,6 +247,13 @@ constexpr auto SlotMap<T, I, G>::emplace(Args&&... args) -> emplace_result {
 }
 
 template<typename T, unsigned I, unsigned G>
+constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
+    auto erase_obj_idx = std::distance(begin(), it);
+    erase_impl(erase_obj_idx);
+    return std::next(begin(), erase_obj_idx);
+}
+
+template<typename T, unsigned I, unsigned G>
 constexpr void SlotMap<T, I, G>::erase_impl(IdxT erase_obj_idx) noexcept {
     using std::swap;
     auto back_idx_idx = keys.back();
@@ -302,13 +309,6 @@ constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
     SLOTMAP_FIND_DEF(k);
 }
 #undef SLOTMAP_FIND_DEF
-
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
-    auto erase_obj_idx = std::distance(begin(), it);
-    erase_impl(erase_obj_idx);
-    return it;
-}
 
 template<typename T, unsigned I, unsigned G>
 constexpr void swap(SlotMap<T, I, G>& l, SlotMap<T, I, G>& r) noexcept {
