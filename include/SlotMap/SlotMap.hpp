@@ -135,20 +135,20 @@ public:
     constexpr void clear() noexcept;
 
     template<std::copy_constructible = value_type>
-    [[nodiscard]] constexpr key_type insert(const value_type& val) { return EmplaceImpl(val); }
+    [[nodiscard]] constexpr key_type insert(const value_type& val) { return emplace(val).key; }
     template<std::move_constructible = value_type>
-    [[nodiscard]] constexpr key_type insert(value_type&& val) { return EmplaceImpl(std::move(val)); }
+    [[nodiscard]] constexpr key_type insert(value_type&& val) { return emplace(std::move(val)).key; }
     template<typename... Args>
         requires std::constructible_from<value_type, Args&&...>
     [[nodiscard]] constexpr emplace_result emplace(Args&&... args);
     constexpr iterator erase(iterator it) noexcept;
-    constexpr void erase(key_type k) noexcept { EraseImpl(Index(k)); }
+    constexpr void erase(key_type k) noexcept { erase_impl(index(k)); }
     constexpr void swap(SlotMap& other) noexcept;
 
     constexpr const_iterator find(key_type k) const noexcept;
     constexpr iterator find(key_type k) noexcept;
-    constexpr const T& operator[](key_type k) const noexcept { return objects[Index(k)]; }
-    constexpr T& operator[](key_type k) noexcept { return objects[Index(k)]; }
+    constexpr const T& operator[](key_type k) const noexcept { return objects[index(k)]; }
+    constexpr T& operator[](key_type k) noexcept { return objects[index(k)]; }
     constexpr bool contains(key_type k) const noexcept { return find(k) != end(); };
     template<Detail::SlotMapHasData = SlotMap>
     constexpr const value_type* data() const noexcept { return objects.data(); }
@@ -156,106 +156,15 @@ public:
     constexpr value_type* data() noexcept { return objects.data(); }
 
 private:
-    template<typename... Args>
-        requires std::constructible_from<T, Args&&...>
-    [[nodiscard]] constexpr key_type EmplaceImpl(Args&&... args);
+    constexpr void erase_impl(IdxT erase_obj_idx) noexcept;
 
-    constexpr void EraseImpl(IdxT erase_obj_idx) noexcept;
-
-    constexpr IdxT Index(key_type k) const noexcept {
+    constexpr IdxT index(key_type k) const noexcept {
         assert(k.idx < indices.size());
         auto idx = indices[k.idx].idx;
         assert(idx < objects.size());
         return idx;
     }
 };
-
-template<typename T, unsigned I, unsigned G>
-template<typename... Args>
-    requires std::constructible_from<T, Args&&...>
-constexpr auto SlotMap<T, I, G>::EmplaceImpl(Args&&... args) -> key_type {
-    IdxT obj_idx = objects.size();
-
-    // Reserve space in key-index map
-    if (free_list_head == free_list_null) {
-        IdxT free_list_next = indices.size();
-        indices.emplace_back().idx =
-            std::exchange(free_list_head, free_list_next);
-    }
-
-    // Reserve space in index-key map
-    keys.resize(obj_idx + 1);
-
-    auto idx_idx = free_list_head;
-    auto [gen, free_list_next] = indices[idx_idx];
-
-    // Insert object into object array
-    objects.emplace_back(std::forward<Args>(args)...);
-    // Insert object into index-key map
-    keys.back() = idx_idx;
-    // Insert object into key-index map
-    indices[idx_idx].idx = obj_idx;
-    // Update free list
-    free_list_head = free_list_next;
-
-    return {
-        .gen = gen,
-        .idx = idx_idx,
-    };
-}
-
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::find(key_type k) const noexcept -> const_iterator {
-    auto [key_gen, idx_idx] = k;
-    if (idx_idx < indices.size()) {
-        auto [gen, obj_idx] = indices[idx_idx];
-        if (key_gen == gen) {
-            auto it = std::next(begin(), obj_idx);
-            assert(it < end());
-            return it;
-        }
-    }
-    return end();
-}
-
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
-    auto [key_gen, idx_idx] = k;
-    if (idx_idx < indices.size()) {
-        auto [gen, obj_idx] = indices[idx_idx];
-        if (key_gen == gen) {
-            auto it = std::next(begin(), obj_idx);
-            assert(it < end());
-            return it;
-        }
-    }
-    return end();
-}
-
-template<typename T, unsigned I, unsigned G>
-constexpr void SlotMap<T, I, G>::EraseImpl(IdxT erase_obj_idx) noexcept {
-    using std::swap;
-    auto back_idx_idx = keys.back();
-
-    // Erase object from object array
-    swap(objects[erase_obj_idx], objects.back());
-    objects.pop_back();
-
-    // Erase object from index-key map
-    auto erase_idx_idx =
-        std::exchange(keys[erase_obj_idx], back_idx_idx);
-    keys.pop_back();
-
-    // Update key-index map for back object
-    indices[back_idx_idx].idx = erase_obj_idx;
-
-    // Erase object from key-index map and update free list
-    GenT gen = indices[erase_idx_idx].gen + 1;
-    indices[erase_idx_idx] = {
-        .gen = gen,
-        .idx = std::exchange(free_list_head, erase_idx_idx),
-    };
-}
 
 template<typename T, unsigned I, unsigned G>
 template<Detail::SlotMapHasReserve>
@@ -304,16 +213,62 @@ template<typename T, unsigned I, unsigned G>
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
 constexpr auto SlotMap<T, I, G>::emplace(Args&&... args) -> emplace_result {
-    // TODO: optimize reference retrieval or don't do it
-    auto key = EmplaceImpl(std::forward<Args>(args)...);
-    return { key, (*this)[key] };
+    IdxT obj_idx = objects.size();
+
+    // Reserve space in key-index map
+    if (free_list_head == free_list_null) {
+        IdxT free_list_next = indices.size();
+        indices.emplace_back().idx =
+            std::exchange(free_list_head, free_list_next);
+    }
+
+    // Reserve space in index-key map
+    keys.resize(obj_idx + 1);
+
+    auto idx_idx = free_list_head;
+    auto [gen, free_list_next] = indices[idx_idx];
+
+    // Insert object into object array
+    auto& ref = objects.emplace_back(std::forward<Args>(args)...);
+    // Insert object into index-key map
+    keys.back() = idx_idx;
+    // Insert object into key-index map
+    indices[idx_idx].idx = obj_idx;
+    // Update free list
+    free_list_head = free_list_next;
+
+    return {
+        .key = {
+            .gen = gen,
+            .idx = idx_idx,
+        },
+        .reference = ref,
+    };
 }
 
 template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
-    auto erase_obj_idx = &*it - objects.data();
-    EraseImpl(erase_obj_idx);
-    return it;
+constexpr void SlotMap<T, I, G>::erase_impl(IdxT erase_obj_idx) noexcept {
+    using std::swap;
+    auto back_idx_idx = keys.back();
+
+    // Erase object from object array
+    swap(objects[erase_obj_idx], objects.back());
+    objects.pop_back();
+
+    // Erase object from index-key map
+    auto erase_idx_idx =
+        std::exchange(keys[erase_obj_idx], back_idx_idx);
+    keys.pop_back();
+
+    // Update key-index map for back object
+    indices[back_idx_idx].idx = erase_obj_idx;
+
+    // Erase object from key-index map and update free list
+    GenT gen = indices[erase_idx_idx].gen + 1;
+    indices[erase_idx_idx] = {
+        .gen = gen,
+        .idx = std::exchange(free_list_head, erase_idx_idx),
+    };
 }
 
 template<typename T, unsigned I, unsigned G>
@@ -323,6 +278,36 @@ constexpr void SlotMap<T, I, G>::swap(SlotMap<T, I, G>& other) noexcept {
     swap(indices, other.indices);
     swap(keys, other.keys);
     swap(free_list_head, other.free_list_head);
+}
+
+#define SLOTMAP_FIND_DEF(k) \
+    auto [key_gen, idx_idx] = k;\
+    if (idx_idx < indices.size()) {\
+        auto [gen, obj_idx] = indices[idx_idx];\
+        if (key_gen == gen) {\
+            auto it = std::next(begin(), obj_idx);\
+            assert(it < end());\
+            return it;\
+        }\
+    }\
+    return end();
+
+template<typename T, unsigned I, unsigned G>
+constexpr auto SlotMap<T, I, G>::find(key_type k) const noexcept -> const_iterator {
+    SLOTMAP_FIND_DEF(k);
+}
+
+template<typename T, unsigned I, unsigned G>
+constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
+    SLOTMAP_FIND_DEF(k);
+}
+#undef SLOTMAP_FIND_DEF
+
+template<typename T, unsigned I, unsigned G>
+constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
+    auto erase_obj_idx = std::distance(begin(), it);
+    erase_impl(erase_obj_idx);
+    return it;
 }
 
 template<typename T, unsigned I, unsigned G>
