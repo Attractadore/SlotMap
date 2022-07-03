@@ -165,3 +165,118 @@ TEST(TestEmplace, EmplaceAfterErase) {
     EXPECT_EQ(*base_it, 0);
     EXPECT_EQ(*new_it, 2);
 }
+
+TEST(TestErase, EraseIterator) {
+    SlotMap<int> s;
+
+    auto k = s.insert(0);
+    auto it = s.find(k);
+    ASSERT_NE(it, s.end());
+
+    s.erase(it);
+    EXPECT_EQ(s.size(), 0);
+    EXPECT_EQ(s.find(k), s.end());
+}
+
+TEST(TestErase, EraseKey) {
+    SlotMap<int> s;
+
+    auto k = s.insert(0);
+
+    s.erase(k);
+    EXPECT_EQ(s.size(), 0);
+    EXPECT_EQ(s.find(k), s.end());
+}
+
+TEST(TestSwap, Swap) {
+    SlotMap<int> s1, s2;
+    using key_type = decltype(s1)::key_type;
+    std::vector<key_type> keys1;
+    std::vector<key_type> keys2;
+    std::array vals = {0, 1, 2, 3, 4, 5};
+
+    int i = 0;
+    for (; i < 4; i++) {
+        keys1.push_back(s1.insert(vals[i]));
+    }
+    for (; i < vals.size(); i++) {
+        keys2.push_back(s2.insert(vals[i]));
+    }
+
+    swap(s1, s2);
+
+    i = 0;
+    for (; i < 4; i++) {
+        auto k = keys1[i];
+        EXPECT_EQ(s2[k], vals[i]);
+    }
+    for (; i < vals.size(); i++) {
+        auto k = keys2[i - 4];
+        EXPECT_EQ(s1[k], vals[i]);
+    }
+}
+
+TEST(TestFind, FindPresent) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    auto it = s.find(k);
+    ASSERT_NE(it, s.end());
+    EXPECT_EQ(*it, val);
+}
+
+TEST(TestFind, FindNotPresent) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    s.erase(k);
+    auto new_k = s.insert(val);
+    auto it = s.find(k);
+    EXPECT_EQ(it, s.end());
+}
+
+TEST(TestFind, FindAfterClear) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    s.clear();
+    auto it = s.find(k);
+    EXPECT_EQ(it, s.end());
+}
+
+TEST(TestAccess, Access) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    EXPECT_EQ(s[k], val);
+}
+
+TEST(TestContains, ContainsPresent) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    EXPECT_TRUE(s.contains(k));
+}
+
+TEST(TestContains, ContainsNotPresent) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    s.erase(k);
+    EXPECT_FALSE(s.contains(k));
+}
+
+TEST(TestContains, ContainsAfterClear) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k = s.insert(val);
+    s.clear();
+    EXPECT_FALSE(s.contains(k));
+}
+
+TEST(TestData, Data) {
+    SlotMap<int> s;
+    auto val = 0xffdead;
+    auto k1 = s.insert(val);
+    EXPECT_EQ(&s[k1], s.data());
+}

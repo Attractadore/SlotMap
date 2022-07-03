@@ -1,7 +1,8 @@
 #pragma once
+#include <cassert>
+#include <cstdint>
 #include <utility>
 #include <vector>
-#include <cstdint>
 
 namespace Attractadore {
 namespace Detail {
@@ -18,7 +19,7 @@ auto MinWideTypeImpl() {
     } else throw "Too many bits to pack into a standard type";
 }
 
-template<unsigned Bits> 
+template<unsigned Bits>
 using MinWideType = decltype(MinWideTypeImpl<Bits>());
 
 template<unsigned IdxBits, unsigned GenBits>
@@ -74,6 +75,15 @@ concept SlotMapHasShrinkToFit =
     HasShrinkToFit<typename SlotMap::ObjC> and
     HasShrinkToFit<typename SlotMap::IdxC> and
     HasShrinkToFit<typename SlotMap::KeyC>;
+
+template<typename C>
+concept HasData = requires (C c, const C cc) {
+    c.data();
+    cc.data();
+};
+
+template<typename SlotMap>
+concept SlotMapHasData = HasData<typename SlotMap::ObjC>;
 }
 
 template<
@@ -122,7 +132,6 @@ public:
 
     constexpr void clear() noexcept;
 
-    // TODO: insert for > 1?
     template<std::copy_constructible = value_type>
     [[nodiscard]] constexpr key_type insert(const value_type& val) { return EmplaceImpl(val); }
     template<std::move_constructible = value_type>
@@ -130,19 +139,19 @@ public:
     template<typename... Args>
         requires std::constructible_from<value_type, Args&&...>
     [[nodiscard]] constexpr emplace_result emplace(Args&&... args);
-
     constexpr iterator erase(iterator it) noexcept;
     constexpr void erase(key_type k) noexcept { EraseImpl(Index(k)); }
-    // TODO: is std::swap good enough?
-    constexpr void swap(SlotMap& other) noexcept(noexcept(std::swap(*this, other))) { std::swap(*this, other); }
+    constexpr void swap(SlotMap& other) noexcept;
 
     constexpr const_iterator find(key_type k) const noexcept;
     constexpr iterator find(key_type k) noexcept;
     constexpr const T& operator[](key_type k) const noexcept { return objects[Index(k)]; }
     constexpr T& operator[](key_type k) noexcept { return objects[Index(k)]; }
     constexpr bool contains(key_type k) const noexcept { return find(k) != end(); };
-    constexpr const T* data() const noexcept { return objects.data(); }
-    constexpr T* data() noexcept { return objects.data(); }
+    template<Detail::SlotMapHasData = SlotMap>
+    constexpr const value_type* data() const noexcept { return objects.data(); }
+    template<Detail::SlotMapHasData = SlotMap>
+    constexpr value_type* data() noexcept { return objects.data(); }
 
 private:
     template<typename... Args>
@@ -151,13 +160,19 @@ private:
 
     constexpr void EraseImpl(IdxT erase_obj_idx) noexcept;
 
-    constexpr IdxT Index(key_type k) const noexcept { return indices[k.idx].idx; }
+    constexpr IdxT Index(key_type k) const noexcept {
+        assert(k.idx < indices.size());
+        auto idx = indices[k.idx].idx;
+        assert(idx < objects.size());
+        return idx;
+    }
 };
 
 template<typename T, unsigned I, unsigned G>
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
 constexpr auto SlotMap<T, I, G>::EmplaceImpl(Args&&... args) -> key_type {
+    // TODO: exception safety?
     if (free_list_head == free_list_null) {
         IdxT idx = indices.size();
         objects.emplace_back(std::forward<Args>(args)...);
@@ -182,16 +197,31 @@ constexpr auto SlotMap<T, I, G>::EmplaceImpl(Args&&... args) -> key_type {
 }
 
 template<typename T, unsigned I, unsigned G>
+constexpr auto SlotMap<T, I, G>::find(key_type k) const noexcept -> const_iterator {
+    auto [key_gen, idx_idx] = k;
+    if (idx_idx < indices.size()) {
+        auto [gen, obj_idx] = indices[idx_idx];
+        if (key_gen == gen) {
+            auto it = std::next(begin(), obj_idx);
+            assert(it < end());
+            return it;
+        }
+    }
+    return end();
+}
+
+template<typename T, unsigned I, unsigned G>
 constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
-    if (k.idx >= indices.size()) {
-        return end();
+    auto [key_gen, idx_idx] = k;
+    if (idx_idx < indices.size()) {
+        auto [gen, obj_idx] = indices[idx_idx];
+        if (key_gen == gen) {
+            auto it = std::next(begin(), obj_idx);
+            assert(it < end());
+            return it;
+        }
     }
-    auto [gen, obj_idx] = indices[k.idx];
-    if (gen != k.gen) {
-        return end();
-    } else {
-        return std::next(begin(), obj_idx);
-    }
+    return end();
 }
 
 template<typename T, unsigned I, unsigned G>
@@ -201,20 +231,20 @@ constexpr void SlotMap<T, I, G>::EraseImpl(IdxT erase_obj_idx) noexcept {
     objects.pop_back();
 
     // Erase object from index-key map
-    auto back_obj_idx_idx = keys.back();
-    auto erase_obj_idx_idx =
-        std::exchange(keys[erase_obj_idx], back_obj_idx_idx);
+    auto back_idx_idx = keys.back();
+    auto erase_idx_idx =
+        std::exchange(keys[erase_obj_idx], back_idx_idx);
     keys.pop_back();
 
     // Update key-index map for back object
-    indices[back_obj_idx_idx].idx = erase_obj_idx;
+    indices[back_idx_idx].idx = erase_obj_idx;
 
     // Update erased object's generation
-    indices[erase_obj_idx_idx].gen++;
+    indices[erase_idx_idx].gen++;
 
     // Update free list
-    indices[erase_obj_idx_idx].idx =
-        std::exchange(free_list_head, erase_obj_idx_idx);
+    indices[erase_idx_idx].idx =
+        std::exchange(free_list_head, erase_idx_idx);
 }
 
 template<typename T, unsigned I, unsigned G>
@@ -277,7 +307,16 @@ constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
 }
 
 template<typename T, unsigned I, unsigned G>
-constexpr void swap(SlotMap<T, I, G>& l, SlotMap<T, I, G>& r) noexcept(noexcept(l.swap(l, r))) {
+constexpr void SlotMap<T, I, G>::swap(SlotMap<T, I, G>& other) noexcept {
+    using std::swap;
+    swap(objects, other.objects);
+    swap(indices, other.indices);
+    swap(keys, other.keys);
+    swap(free_list_head, other.free_list_head);
+}
+
+template<typename T, unsigned I, unsigned G>
+constexpr void swap(SlotMap<T, I, G>& l, SlotMap<T, I, G>& r) noexcept {
     l.swap(r);
 }
 }
