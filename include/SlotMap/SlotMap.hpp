@@ -7,7 +7,7 @@
 
 namespace Attractadore {
 namespace Detail {
-template<unsigned Bits> 
+template<unsigned Bits>
 auto MinWideTypeImpl() {
     if constexpr (Bits <= 8) {
         return uint8_t();
@@ -31,11 +31,20 @@ struct Key {
 
     static constexpr auto idx_bits = IdxBits;
     static constexpr auto gen_bits = GenBits;
-    static constexpr auto max_idx = (1u << IdxBits) - 1u;
-    static constexpr auto max_gen = (1u << GenBits) - 1u;
+    static constexpr auto max_idx = (1ull << IdxBits) - 1u;
+    static constexpr auto max_gen = (1ull << GenBits) - 1u;
 
     pack_type gen: GenBits;
     pack_type idx: IdxBits;
+
+    constexpr auto operator<=>(const Key& other) const noexcept {
+        auto idx_order = std::strong_order(idx, other.idx);
+        if (idx_order == std::strong_ordering::equal) {
+            return std::strong_order(gen, other.gen);
+        } else {
+            return idx_order;
+        }
+    }
 };
 
 template<typename Key, typename Value>
