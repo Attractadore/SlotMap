@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <utility>
@@ -108,11 +109,13 @@ class SlotMap {
     IdxT free_list_head = free_list_null;
 
 public:
+    using key_type          = Key;
+    using value_type        = T;
+    using const_reference   = const T&;
+    using reference         = T&;
     using const_iterator    = typename ObjC::const_iterator;
     using iterator          = typename ObjC::iterator;
     using size_type         = IdxT;
-    using value_type        = T;
-    using key_type          = Key;
     using emplace_result    = Detail::EmplaceResult<key_type, value_type>;
 
     constexpr const_iterator cbegin() const noexcept { return objects.cbegin(); }
@@ -154,6 +157,9 @@ public:
     constexpr const value_type* data() const noexcept { return objects.data(); }
     template<Detail::SlotMapHasData = SlotMap>
     constexpr value_type* data() noexcept { return objects.data(); }
+
+    constexpr bool operator==(const SlotMap& other) const noexcept;
+    constexpr bool operator!=(const SlotMap& other) const noexcept { return not (*this == other); }
 
 private:
     constexpr void erase_impl(IdxT erase_obj_idx) noexcept;
@@ -309,6 +315,13 @@ constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
     SLOTMAP_FIND_DEF(k);
 }
 #undef SLOTMAP_FIND_DEF
+
+template<typename T, unsigned I, unsigned G>
+constexpr bool SlotMap<T, I, G>::operator==(const SlotMap& other) const noexcept {
+    return std::is_permutation(
+        objects.begin(), objects.end(),
+        other.objects.begin(), other.objects.end());
+}
 
 template<typename T, unsigned I, unsigned G>
 constexpr void swap(SlotMap<T, I, G>& l, SlotMap<T, I, G>& r) noexcept {

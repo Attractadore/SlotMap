@@ -302,3 +302,76 @@ TEST(TestData, Data) {
     auto k1 = s.insert(val);
     EXPECT_EQ(&s[k1], s.data());
 }
+
+TEST(TestCompare, Self) {
+    SlotMap<int> s1;
+    EXPECT_EQ(s1, s1);
+}
+
+TEST(TestCompare, Copy) {
+    SlotMap<int> s1;
+    auto s2 = s1;
+    EXPECT_EQ(s1, s2);
+}
+
+TEST(TestCompare, DifferentEmpty) {
+    SlotMap<int> s1;
+    SlotMap<int> s2;
+    EXPECT_EQ(s1, s2);
+}
+
+TEST(TestCompare, DifferentNotEmpty) {
+    SlotMap<int> s1;
+    auto k = s1.insert(0);
+    SlotMap<int> s2;
+    EXPECT_NE(s1, s2);
+}
+
+TEST(TestCompare, DifferentSame) {
+    SlotMap<int> s1;
+    for (int i = 0; i < 16; i++) {
+        auto k = s1.insert(i);
+    }
+    SlotMap<int> s2;
+    for (int i = 0; i < 16; i++) {
+        EXPECT_NE(s1, s2);
+        auto k = s2.insert(i);
+    }
+    EXPECT_EQ(s1, s2);
+}
+
+TEST(TestCompare, DifferentSameButOlder) {
+    SlotMap<int> s1;
+    for (int i = 0; i < 16; i++) {
+        auto k = s1.insert(i);
+    }
+    for (auto it = s1.begin(); it != s1.end();) {
+        it = s1.erase(it);
+    }
+    for (int i = 0; i < 16; i++) {
+        auto k = s1.insert(i);
+    }
+    SlotMap<int> s2;
+    for (int i = 0; i < 16; i++) {
+        EXPECT_NE(s1, s2);
+        auto k = s2.insert(i);
+    }
+    EXPECT_EQ(s1, s2);
+}
+
+TEST(TestCompare, DifferentSameButCleared) {
+    SlotMap<int> s1;
+    for (int i = 0; i < 16; i++) {
+        auto k = s1.insert(i);
+    }
+    s1.clear();
+    for (int i = 0; i < 16; i++) {
+        auto k = s1.insert(i);
+    }
+    SlotMap<int> s2;
+    for (int i = 0; i < 16; i++) {
+        EXPECT_NE(s1, s2);
+        auto k = s2.insert(i);
+    }
+    EXPECT_EQ(s1, s2);
+}
