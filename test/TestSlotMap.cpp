@@ -71,6 +71,23 @@ TEST(TestClear, Clear) {
     EXPECT_TRUE(s.empty());
 }
 
+TEST(TestClear, ValueAfterInsertAfterClear) {
+    SlotMap<int> s;
+    for (size_t i = 0; i < 3; i++) {
+        auto k = s.insert(i);
+    }
+    s.clear();
+    EXPECT_TRUE(s.empty());
+    std::vector values = {0, 1, 2, 3, 4};
+    for (auto v: values) {
+        auto k = s.insert(v);
+        auto it = s.find(k);
+        ASSERT_NE(it, s.end()) <<
+            "Iterator for value " << v << " and key (" << k << ") is end()";
+        EXPECT_EQ(*it, v);
+    }
+}
+
 TEST(TestInsert, ValueAfterInsert) {
     SlotMap<int> s;
     std::vector values = {0, 1, 2, 3, 4};
@@ -107,6 +124,35 @@ TEST(TestInsert, InsertAfterErase) {
     auto old_k = s.insert(1);
     s.erase(s.find(old_k));
     auto new_k = s.insert(2);
+
+    auto base_it = s.find(base_k);
+    auto old_it = s.find(old_k);
+    auto new_it = s.find(new_k);
+
+    ASSERT_NE(base_it, s.end());
+    ASSERT_EQ(old_it, s.end());
+    ASSERT_NE(new_it, s.end());
+
+    EXPECT_EQ(*base_it, 0);
+    EXPECT_EQ(*new_it, 2);
+}
+
+TEST(TestEmplace, Emplace) {
+    SlotMap<int> s;
+    std::vector values = {0, 1, 2, 3, 4};
+    for (auto v: values) {
+        auto&& [k, ref] = s.emplace(v);
+        EXPECT_EQ(ref, v);
+    }
+}
+
+TEST(TestEmplace, EmplaceAfterErase) {
+    SlotMap<int> s;
+
+    auto base_k = s.emplace(0).key;
+    auto old_k = s.emplace(1).key;
+    s.erase(old_k);
+    auto new_k = s.emplace(2).key;
 
     auto base_it = s.find(base_k);
     auto old_it = s.find(old_k);
