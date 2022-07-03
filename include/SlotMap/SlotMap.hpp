@@ -256,9 +256,12 @@ constexpr void SLOTMAP::shrink_to_fit() {
 SLOTMAP_TEMPLATE_DECL
 constexpr void SLOTMAP::clear() noexcept {
     objects.clear();
-    indices.clear();
+    // Push all objects into free list
+    for (auto idx_idx: keys) {
+        indices[idx_idx].gen++;
+        indices[idx_idx].idx = std::exchange(free_list_head, idx_idx);
+    }
     keys.clear();
-    free_list_head = free_list_null;
 }
 
 SLOTMAP_TEMPLATE_DECL
