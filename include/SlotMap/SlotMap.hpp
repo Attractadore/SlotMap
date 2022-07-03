@@ -94,11 +94,13 @@ template<
 class SlotMap {
     using Key   = Detail::Key<IdxBits, GenBits>;
     using IdxT  = typename Key::idx_type;
-    static constexpr IdxT free_list_null = Key::max_idx;
+    using GenT  = typename Key::gen_type;
 
     using ObjC  = std::vector<T>;
     using IdxC  = std::vector<Key>;
     using KeyC  = std::vector<IdxT>;
+
+    static constexpr IdxT free_list_null = Key::max_idx;
 
     ObjC objects;
     IdxC indices;
@@ -172,27 +174,33 @@ template<typename T, unsigned I, unsigned G>
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
 constexpr auto SlotMap<T, I, G>::EmplaceImpl(Args&&... args) -> key_type {
-    // TODO: exception safety?
+    IdxT obj_idx = objects.size();
+
+    // Reserve space in key-index map
     if (free_list_head == free_list_null) {
-        IdxT idx = indices.size();
-        objects.emplace_back(std::forward<Args>(args)...);
-        keys.push_back(idx);
-        indices.push_back({.idx = idx});
-        return {
-            .idx = idx,
-        };
-    } else {
-        auto& [gen, next] = indices[free_list_head];
-        auto idx = free_list_head;
-        IdxT obj_idx = objects.size();
-        objects.emplace_back(std::forward<Args>(args)...);
-        keys.push_back(idx);
-        free_list_head = next;
-        next = obj_idx;
-        return {
-            .gen = gen,
-            .idx = idx,
-        };
+        IdxT free_list_next = indices.size();
+        indices.emplace_back().idx =
+            std::exchange(free_list_head, free_list_next);
+    }
+
+    // Reserve space in index-key map
+    keys.resize(obj_idx + 1);
+
+    auto idx_idx = free_list_head;
+    auto [gen, free_list_next] = indices[idx_idx];
+
+    // Insert object into object array
+    objects.emplace_back(std::forward<Args>(args)...);
+    // Insert object into index-key map
+    keys.back() = idx_idx;
+    // Insert object into key-index map
+    indices[idx_idx].idx = obj_idx;
+    // Update free list
+    free_list_head = free_list_next;
+
+    return {
+        .gen = gen,
+        .idx = idx_idx,
     };
 }
 
@@ -226,12 +234,14 @@ constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
 
 template<typename T, unsigned I, unsigned G>
 constexpr void SlotMap<T, I, G>::EraseImpl(IdxT erase_obj_idx) noexcept {
+    using std::swap;
+    auto back_idx_idx = keys.back();
+
     // Erase object from object array
-    std::swap(objects[erase_obj_idx], objects.back());
+    swap(objects[erase_obj_idx], objects.back());
     objects.pop_back();
 
     // Erase object from index-key map
-    auto back_idx_idx = keys.back();
     auto erase_idx_idx =
         std::exchange(keys[erase_obj_idx], back_idx_idx);
     keys.pop_back();
@@ -239,12 +249,12 @@ constexpr void SlotMap<T, I, G>::EraseImpl(IdxT erase_obj_idx) noexcept {
     // Update key-index map for back object
     indices[back_idx_idx].idx = erase_obj_idx;
 
-    // Update erased object's generation
-    indices[erase_idx_idx].gen++;
-
-    // Update free list
-    indices[erase_idx_idx].idx =
-        std::exchange(free_list_head, erase_idx_idx);
+    // Erase object from key-index map and update free list
+    GenT gen = indices[erase_idx_idx].gen + 1;
+    indices[erase_idx_idx] = {
+        .gen = gen,
+        .idx = std::exchange(free_list_head, erase_idx_idx),
+    };
 }
 
 template<typename T, unsigned I, unsigned G>
