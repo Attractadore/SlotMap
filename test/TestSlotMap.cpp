@@ -1,4 +1,4 @@
-#include "SlotMap/SlotMap.hpp"
+#include "Attractadore/SlotMap.hpp"
 
 #include <gtest/gtest.h>
 
