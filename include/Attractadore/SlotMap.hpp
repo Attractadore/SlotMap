@@ -60,7 +60,7 @@ concept HasReserve = requires (C c) {
 };
 
 template<typename SlotMap>
-concept SlotMapHasReserve =
+concept SlotMapCanReserve =
     HasReserve<typename SlotMap::ObjC> and
     HasReserve<typename SlotMap::IdxC> and
     HasReserve<typename SlotMap::KeyC>;
@@ -82,7 +82,7 @@ concept HasShrinkToFit = requires (C c) {
 };
 
 template<typename SlotMap>
-concept SlotMapHasShrinkToFit =
+concept SlotMapCanShrinkToFit =
     HasShrinkToFit<typename SlotMap::ObjC> and
     HasShrinkToFit<typename SlotMap::IdxC> and
     HasShrinkToFit<typename SlotMap::KeyC>;
@@ -104,7 +104,6 @@ template<
     template <typename> typename KeyContainer
 >
 concept SlotMapRequires =
-    std::is_nothrow_move_constructible_v<T> and
     (IdxBits + GenBits <= 64) and
     (IdxBits > 0) and
     (GenBits > 0) and
@@ -122,7 +121,7 @@ template<typename T>
 using StdVector = std::vector<T>;
 }
 
-#define SLOTMAP_TEMPLATE_DECL template<\
+#define SLOTMAP_TEMPLATE template<\
     typename T,\
     unsigned I,\
     unsigned G,\
@@ -174,21 +173,20 @@ public:
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr size_type size() const noexcept { return std::distance(begin(), end()); }
     static constexpr size_type max_size() noexcept { return Key::max_idx - 1; }
-    template<Detail::SlotMapHasReserve = SlotMap>
-    constexpr void reserve(size_type sz);
-    template<Detail::SlotMapHasCapacity = SlotMap>
-    constexpr size_type capacity() const noexcept;
-    template<Detail::SlotMapHasShrinkToFit = SlotMap>
-    constexpr void shrink_to_fit();
+    constexpr void reserve(size_type sz)
+        requires Detail::SlotMapCanReserve<SlotMap>;
+    constexpr size_type capacity() const noexcept
+        requires Detail::SlotMapHasCapacity<SlotMap>;
+    constexpr void shrink_to_fit()
+        requires Detail::SlotMapCanShrinkToFit<SlotMap>;
 
     constexpr void clear() noexcept;
 
-    template<std::copy_constructible = value_type>
-    [[nodiscard]] constexpr key_type insert(const value_type& val) { return emplace(val).key; }
-    template<std::move_constructible = value_type>
-    [[nodiscard]] constexpr key_type insert(value_type&& val) { return emplace(std::move(val)).key; }
-    template<typename... Args>
-        requires std::constructible_from<value_type, Args&&...>
+    [[nodiscard]] constexpr key_type insert(const value_type& val)
+        requires std::copy_constructible<value_type> { return emplace(val).key; }
+    [[nodiscard]] constexpr key_type insert(value_type&& val)
+        requires std::move_constructible<value_type> { return emplace(std::move(val)).key; }
+    template<typename... Args> requires std::constructible_from<value_type, Args&&...>
     [[nodiscard]] constexpr emplace_result emplace(Args&&... args);
     constexpr iterator erase(iterator it) noexcept;
     constexpr void erase(key_type k) noexcept { erase_impl(index(k)); }
@@ -199,10 +197,10 @@ public:
     constexpr const T& operator[](key_type k) const noexcept { return objects[index(k)]; }
     constexpr T& operator[](key_type k) noexcept { return objects[index(k)]; }
     constexpr bool contains(key_type k) const noexcept { return find(k) != end(); };
-    template<Detail::SlotMapHasData = SlotMap>
-    constexpr const value_type* data() const noexcept { return objects.data(); }
-    template<Detail::SlotMapHasData = SlotMap>
-    constexpr value_type* data() noexcept { return objects.data(); }
+    constexpr const value_type* data() const noexcept
+        requires Detail::SlotMapHasData<SlotMap> { return objects.data(); }
+    constexpr value_type* data() noexcept
+        requires Detail::SlotMapHasData<SlotMap> { return objects.data(); }
 
     constexpr bool operator==(const SlotMap& other) const noexcept;
     constexpr bool operator!=(const SlotMap& other) const noexcept { return not (*this == other); }
@@ -218,17 +216,19 @@ private:
     }
 };
 
-SLOTMAP_TEMPLATE_DECL
-template<Detail::SlotMapHasReserve>
-constexpr void SLOTMAP::reserve(size_type sz) {
+SLOTMAP_TEMPLATE
+constexpr void SLOTMAP::reserve(size_type sz)
+    requires Detail::SlotMapCanReserve<SLOTMAP>
+{
     objects.reserve(sz);
     indices.reserve(sz);
     keys.reserve(sz);
 }
 
-SLOTMAP_TEMPLATE_DECL
-template<Detail::SlotMapHasCapacity>
-constexpr auto SLOTMAP::capacity() const noexcept -> size_type {
+SLOTMAP_TEMPLATE
+constexpr auto SLOTMAP::capacity() const noexcept -> size_type
+    requires Detail::SlotMapHasCapacity<SLOTMAP>
+{
     auto cap = max_size();
     auto obj_cap = objects.capacity();
     if (obj_cap < cap) {
@@ -245,15 +245,16 @@ constexpr auto SLOTMAP::capacity() const noexcept -> size_type {
     return cap;
 }
 
-SLOTMAP_TEMPLATE_DECL
-template<Detail::SlotMapHasShrinkToFit>
-constexpr void SLOTMAP::shrink_to_fit() {
+SLOTMAP_TEMPLATE
+constexpr void SLOTMAP::shrink_to_fit()
+    requires Detail::SlotMapCanShrinkToFit<SLOTMAP> 
+{
     objects.shrink_to_fit();
     indices.shrink_to_fit();
     keys.shrink_to_fit();
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::clear() noexcept {
     objects.clear();
     // Push all objects into free list
@@ -264,7 +265,7 @@ constexpr void SLOTMAP::clear() noexcept {
     keys.clear();
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
 constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
@@ -301,14 +302,14 @@ constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
     };
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr auto SLOTMAP::erase(iterator it) noexcept -> iterator {
     auto erase_obj_idx = std::distance(begin(), it);
     erase_impl(erase_obj_idx);
     return std::next(begin(), erase_obj_idx);
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
     auto back_idx_idx = keys.back();
 
@@ -332,7 +333,7 @@ constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
     };
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
     std::ranges::swap(objects, other.objects);
     std::ranges::swap(indices, other.indices);
@@ -340,7 +341,7 @@ constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
     std::ranges::swap(free_list_head, other.free_list_head);
 }
 
-#define SLOTMAP_FIND_DEF(k) \
+#define SLOTMAP_FIND(k) \
     auto [key_gen, idx_idx] = k;\
     if (idx_idx < indices.size()) {\
         auto [gen, obj_idx] = indices[idx_idx];\
@@ -352,29 +353,29 @@ constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
     }\
     return end();
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr auto SLOTMAP::find(key_type k) const noexcept -> const_iterator {
-    SLOTMAP_FIND_DEF(k);
+    SLOTMAP_FIND(k);
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr auto SLOTMAP::find(key_type k) noexcept -> iterator {
-    SLOTMAP_FIND_DEF(k);
+    SLOTMAP_FIND(k);
 }
-#undef SLOTMAP_FIND_DEF
+#undef SLOTMAP_FIND
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr bool SLOTMAP::operator==(const SlotMap& other) const noexcept {
     return std::is_permutation(
         objects.begin(), objects.end(),
         other.objects.begin(), other.objects.end());
 }
 
-SLOTMAP_TEMPLATE_DECL
+SLOTMAP_TEMPLATE
 constexpr void swap(SLOTMAP& l, SLOTMAP& r) noexcept {
     l.swap(r);
 }
 
-#undef SLOTMAP_TEMPLATE_DECL
+#undef SLOTMAP_TEMPLATE
 #undef SLOTMAP
 }
