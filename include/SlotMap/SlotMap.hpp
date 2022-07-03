@@ -7,7 +7,7 @@
 
 namespace Attractadore {
 namespace Detail {
-template<unsigned Bits>
+template<unsigned Bits> requires (Bits <= 64)
 auto MinWideTypeImpl() {
     if constexpr (Bits <= 8) {
         return uint8_t();
@@ -17,13 +17,14 @@ auto MinWideTypeImpl() {
         return uint32_t();
     } else if constexpr (Bits <= 64) {
         return uint64_t();
-    } else throw "Too many bits to pack into a standard type";
+    }
 }
 
 template<unsigned Bits>
 using MinWideType = decltype(MinWideTypeImpl<Bits>());
 
 template<unsigned IdxBits, unsigned GenBits>
+    requires (IdxBits + GenBits <= 64) and (IdxBits > 0) and (GenBits > 0)
 struct Key {
     using pack_type = MinWideType<IdxBits + GenBits>;
     using idx_type  = MinWideType<IdxBits>;
@@ -94,21 +95,48 @@ concept HasData = requires (C c, const C cc) {
 
 template<typename SlotMap>
 concept SlotMapHasData = HasData<typename SlotMap::ObjC>;
+
+template<
+    typename T,
+    unsigned IdxBits,
+    unsigned GenBits,
+    template <typename> typename ObjectContainer,
+    template <typename> typename KeyContainer
+>
+concept SlotMapRequires =
+    std::is_nothrow_move_constructible_v<T> and
+    (IdxBits + GenBits <= 64) and
+    (IdxBits > 0) and
+    (GenBits > 0);
+
+template<typename T>
+using StdVector = std::vector<T>;
 }
+
+#define SLOTMAP_TEMPLATE_DECL template<\
+    typename T,\
+    unsigned I,\
+    unsigned G,\
+    template <typename> typename O,\
+    template <typename> typename K\
+> requires Detail::SlotMapRequires<T, I, G, O, K>
+#define SLOTMAP SlotMap<T, I, G, O, K>
 
 template<
     typename T,
     unsigned IdxBits = 24,
-    unsigned GenBits = 8
->
+    unsigned GenBits = 8,
+    template <typename> typename ObjectContainer = Detail::StdVector,
+    template <typename> typename KeyContainer = Detail::StdVector
+> requires Detail::SlotMapRequires<T, IdxBits, GenBits, ObjectContainer, KeyContainer>
 class SlotMap {
     using Key   = Detail::Key<IdxBits, GenBits>;
     using IdxT  = typename Key::idx_type;
     using GenT  = typename Key::gen_type;
 
-    using ObjC  = std::vector<T>;
-    using IdxC  = std::vector<Key>;
-    using KeyC  = std::vector<IdxT>;
+    using ObjC  = ObjectContainer<T>;
+    using IdxC  = KeyContainer<Key>;
+    using KeyC  = KeyContainer<IdxT>;
 
     static constexpr IdxT free_list_null = Key::max_idx;
 
@@ -181,17 +209,17 @@ private:
     }
 };
 
-template<typename T, unsigned I, unsigned G>
+SLOTMAP_TEMPLATE_DECL
 template<Detail::SlotMapHasReserve>
-constexpr void SlotMap<T, I, G>::reserve(size_type sz) {
+constexpr void SLOTMAP::reserve(size_type sz) {
     objects.reserve(sz);
     indices.reserve(sz);
     keys.reserve(sz);
 }
 
-template<typename T, unsigned I, unsigned G>
+SLOTMAP_TEMPLATE_DECL
 template<Detail::SlotMapHasCapacity>
-constexpr auto SlotMap<T, I, G>::capacity() const noexcept -> size_type {
+constexpr auto SLOTMAP::capacity() const noexcept -> size_type {
     auto cap = max_size();
     auto obj_cap = objects.capacity();
     if (obj_cap < cap) {
@@ -208,26 +236,26 @@ constexpr auto SlotMap<T, I, G>::capacity() const noexcept -> size_type {
     return cap;
 }
 
-template<typename T, unsigned I, unsigned G>
+SLOTMAP_TEMPLATE_DECL
 template<Detail::SlotMapHasShrinkToFit>
-constexpr void SlotMap<T, I, G>::shrink_to_fit() {
+constexpr void SLOTMAP::shrink_to_fit() {
     objects.shrink_to_fit();
     indices.shrink_to_fit();
     keys.shrink_to_fit();
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr void SlotMap<T, I, G>::clear() noexcept {
+SLOTMAP_TEMPLATE_DECL
+constexpr void SLOTMAP::clear() noexcept {
     objects.clear();
     indices.clear();
     keys.clear();
     free_list_head = free_list_null;
 }
 
-template<typename T, unsigned I, unsigned G>
+SLOTMAP_TEMPLATE_DECL
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
-constexpr auto SlotMap<T, I, G>::emplace(Args&&... args) -> emplace_result {
+constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
     IdxT obj_idx = objects.size();
 
     // Reserve space in key-index map
@@ -261,20 +289,19 @@ constexpr auto SlotMap<T, I, G>::emplace(Args&&... args) -> emplace_result {
     };
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::erase(iterator it) noexcept -> iterator {
+SLOTMAP_TEMPLATE_DECL
+constexpr auto SLOTMAP::erase(iterator it) noexcept -> iterator {
     auto erase_obj_idx = std::distance(begin(), it);
     erase_impl(erase_obj_idx);
     return std::next(begin(), erase_obj_idx);
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr void SlotMap<T, I, G>::erase_impl(IdxT erase_obj_idx) noexcept {
-    using std::swap;
+SLOTMAP_TEMPLATE_DECL
+constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
     auto back_idx_idx = keys.back();
 
     // Erase object from object array
-    swap(objects[erase_obj_idx], objects.back());
+    std::ranges::swap(objects[erase_obj_idx], objects.back());
     objects.pop_back();
 
     // Erase object from index-key map
@@ -293,13 +320,12 @@ constexpr void SlotMap<T, I, G>::erase_impl(IdxT erase_obj_idx) noexcept {
     };
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr void SlotMap<T, I, G>::swap(SlotMap<T, I, G>& other) noexcept {
-    using std::swap;
-    swap(objects, other.objects);
-    swap(indices, other.indices);
-    swap(keys, other.keys);
-    swap(free_list_head, other.free_list_head);
+SLOTMAP_TEMPLATE_DECL
+constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
+    std::ranges::swap(objects, other.objects);
+    std::ranges::swap(indices, other.indices);
+    std::ranges::swap(keys, other.keys);
+    std::ranges::swap(free_list_head, other.free_list_head);
 }
 
 #define SLOTMAP_FIND_DEF(k) \
@@ -314,26 +340,29 @@ constexpr void SlotMap<T, I, G>::swap(SlotMap<T, I, G>& other) noexcept {
     }\
     return end();
 
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::find(key_type k) const noexcept -> const_iterator {
+SLOTMAP_TEMPLATE_DECL
+constexpr auto SLOTMAP::find(key_type k) const noexcept -> const_iterator {
     SLOTMAP_FIND_DEF(k);
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr auto SlotMap<T, I, G>::find(key_type k) noexcept -> iterator {
+SLOTMAP_TEMPLATE_DECL
+constexpr auto SLOTMAP::find(key_type k) noexcept -> iterator {
     SLOTMAP_FIND_DEF(k);
 }
 #undef SLOTMAP_FIND_DEF
 
-template<typename T, unsigned I, unsigned G>
-constexpr bool SlotMap<T, I, G>::operator==(const SlotMap& other) const noexcept {
+SLOTMAP_TEMPLATE_DECL
+constexpr bool SLOTMAP::operator==(const SlotMap& other) const noexcept {
     return std::is_permutation(
         objects.begin(), objects.end(),
         other.objects.begin(), other.objects.end());
 }
 
-template<typename T, unsigned I, unsigned G>
-constexpr void swap(SlotMap<T, I, G>& l, SlotMap<T, I, G>& r) noexcept {
+SLOTMAP_TEMPLATE_DECL
+constexpr void swap(SLOTMAP& l, SLOTMAP& r) noexcept {
     l.swap(r);
 }
+
+#undef SLOTMAP_TEMPLATE_DECL
+#undef SLOTMAP
 }

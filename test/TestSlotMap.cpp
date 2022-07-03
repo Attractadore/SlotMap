@@ -10,7 +10,11 @@ std::ostream& operator<<(std::ostream& os, typename Attractadore::Detail::Key<I,
 }
 }
 
-using Attractadore::SlotMap;
+template<typename T>
+using Vector = std::vector<T>;
+
+template<typename T>
+using SlotMap = Attractadore::SlotMap<T, 24, 8, Vector, Vector>;
 
 TEST(TestIsEmpty, Empty) {
     SlotMap<int> s;
