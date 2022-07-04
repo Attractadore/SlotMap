@@ -196,6 +196,8 @@ public:
     constexpr value_type pop(key_type k) noexcept;
     constexpr void swap(SlotMap& other) noexcept;
 
+    constexpr const_iterator access(key_type k) const noexcept { return std::next(begin(), index(k)); }
+    constexpr iterator access(key_type k) noexcept { return std::next(begin(), index(k)); };
     constexpr const_iterator find(key_type k) const noexcept;
     constexpr iterator find(key_type k) noexcept;
     constexpr const T& operator[](key_type k) const noexcept { return objects[index(k)]; }
