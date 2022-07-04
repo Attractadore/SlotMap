@@ -6,6 +6,7 @@
 #include <vector>
 
 namespace Attractadore {
+namespace SlotMapNameSpace {
 namespace Detail {
 template<unsigned Bits> requires (Bits <= 64)
 auto MinWideTypeImpl() {
@@ -378,4 +379,7 @@ constexpr void swap(SLOTMAP& l, SLOTMAP& r) noexcept {
 
 #undef SLOTMAP_TEMPLATE
 #undef SLOTMAP
+}
+
+using SlotMapNameSpace::SlotMap;
 }

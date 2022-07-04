@@ -2,9 +2,9 @@
 
 #include <gtest/gtest.h>
 
-namespace Attractadore::Detail {
+namespace Attractadore::SlotMapNameSpace::Detail {
 template<unsigned I, unsigned G>
-std::ostream& operator<<(std::ostream& os, typename Attractadore::Detail::Key<I, G> key) {
+std::ostream& operator<<(std::ostream& os, Key<I, G> key) {
     os << "idx: " << key.idx << ", gen: " << key.gen;
     return os;
 }
