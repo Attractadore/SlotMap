@@ -191,6 +191,7 @@ TEST(TestErase, EraseAllIterator) {
     for (auto it = s.begin(); it != s.end();) {
         it = s.erase(it);
     }
+    EXPECT_TRUE(s.empty());
 }
 
 TEST(TestErase, EraseAllIteratorBackward) {
@@ -202,6 +203,7 @@ TEST(TestErase, EraseAllIteratorBackward) {
     while(not s.empty()) {
         s.erase(s.end() - 1);
     }
+    EXPECT_TRUE(s.empty());
 }
 
 TEST(TestErase, EraseKey) {
@@ -378,4 +380,35 @@ TEST(TestCompare, DifferentSameButCleared) {
         auto k = s2.insert(i);
     }
     EXPECT_EQ(s1, s2);
+}
+
+TEST(TestPop, Pop) {
+    SlotMap<int> s;
+
+    auto k = s.insert(0);
+
+    auto v = s.pop(k);
+    EXPECT_EQ(s.size(), 0);
+    EXPECT_EQ(s.find(k), s.end());
+    EXPECT_EQ(v, 0);
+}
+
+TEST(TestPop, PopAll) {
+    SlotMap<int> s;
+    using Key = decltype(s)::key_type;
+
+    std::vector values = {0, 1, 2, 3, 4};
+    std::vector<Key> keys;
+
+    for (auto v: values) {
+        auto k = s.insert(v);
+        keys.push_back(k);
+    }
+    for (size_t i = 0; i < values.size(); i++) {
+        auto k = keys[i];
+        EXPECT_EQ(s.size(), values.size() - i);
+        auto v = s.pop(k);
+        EXPECT_EQ(v, values[i]);
+    }
+    EXPECT_TRUE(s.empty());
 }

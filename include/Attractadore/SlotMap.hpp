@@ -105,6 +105,8 @@ template<
     template <typename> typename KeyContainer
 >
 concept SlotMapRequires =
+    std::is_nothrow_move_constructible_v<T> and
+    std::is_nothrow_move_assignable_v<T> and
     (IdxBits + GenBits <= 64) and
     (IdxBits > 0) and
     (GenBits > 0) and
@@ -191,6 +193,7 @@ public:
     [[nodiscard]] constexpr emplace_result emplace(Args&&... args);
     constexpr iterator erase(iterator it) noexcept;
     constexpr void erase(key_type k) noexcept { erase_impl(index(k)); }
+    constexpr value_type pop(key_type k) noexcept;
     constexpr void swap(SlotMap& other) noexcept;
 
     constexpr const_iterator find(key_type k) const noexcept;
@@ -208,6 +211,7 @@ public:
 
 private:
     constexpr void erase_impl(IdxT erase_obj_idx) noexcept;
+    constexpr void erase_index_and_key(IdxT erase_obj_idx) noexcept;
 
     constexpr IdxT index(key_type k) const noexcept {
         assert(k.idx < indices.size());
@@ -311,14 +315,27 @@ constexpr auto SLOTMAP::erase(iterator it) noexcept -> iterator {
 }
 
 SLOTMAP_TEMPLATE
-constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
-    auto back_idx_idx = keys.back();
+constexpr auto SLOTMAP::pop(key_type k) noexcept -> value_type {
+    auto erase_obj_idx = index(k);
+    // Erase object from object array
+    auto temp = std::exchange(objects[erase_obj_idx], objects.back());
+    objects.pop_back();
+    erase_index_and_key(erase_obj_idx);
+    return temp;
+}
 
+SLOTMAP_TEMPLATE
+constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
     // Erase object from object array
     std::ranges::swap(objects[erase_obj_idx], objects.back());
     objects.pop_back();
+    erase_index_and_key(erase_obj_idx);
+}
 
+SLOTMAP_TEMPLATE
+constexpr void SLOTMAP::erase_index_and_key(IdxT erase_obj_idx) noexcept {
     // Erase object from index-key map
+    auto back_idx_idx = keys.back();
     auto erase_idx_idx =
         std::exchange(keys[erase_obj_idx], back_idx_idx);
     keys.pop_back();
