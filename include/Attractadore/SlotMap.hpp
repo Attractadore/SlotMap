@@ -6,53 +6,9 @@
 #include <utility>
 #include <vector>
 
-#include <iostream>
-
 namespace Attractadore {
 namespace SlotMapNameSpace {
 namespace Detail {
-template<unsigned Bits> requires (Bits <= 64)
-auto MinWideTypeImpl() {
-    if constexpr (Bits <= 8) {
-        return uint8_t();
-    } else if constexpr (Bits <= 16) {
-        return uint16_t();
-    } else if constexpr (Bits <= 32) {
-        return uint32_t();
-    } else if constexpr (Bits <= 64) {
-        return uint64_t();
-    }
-}
-
-template<unsigned Bits>
-using MinWideType = decltype(MinWideTypeImpl<Bits>());
-
-template<unsigned IdxBits, unsigned GenBits>
-    requires (IdxBits + GenBits <= 64) and (IdxBits > 0) and (GenBits > 0)
-struct Key {
-    using pack_type = MinWideType<IdxBits + GenBits>;
-    using idx_type  = MinWideType<IdxBits>;
-    using gen_type  = MinWideType<GenBits>;
-
-    static constexpr auto idx_bits = IdxBits;
-    static constexpr auto gen_bits = GenBits;
-    static constexpr auto max_idx = (1ull << IdxBits) - 1u;
-    static constexpr auto max_gen = (1ull << GenBits) - 1u;
-
-    pack_type gen: GenBits;
-    pack_type idx: IdxBits;
-
-    constexpr auto operator<=>(const Key& other) const noexcept {
-        auto idx_order = std::strong_order(idx, other.idx);
-        if (idx_order == std::strong_ordering::equal) {
-            return std::strong_order(gen, other.gen);
-        } else {
-            return idx_order;
-        }
-    }
-    constexpr bool operator==(const Key& other) const noexcept = default;
-};
-
 template<typename T1, typename T2>
 struct cpp23_pair: public std::pair<T1, T2> {
     using typename std::pair<T1, T2>::first_type;
@@ -195,13 +151,13 @@ public:
     }
 
     constexpr auto operator->() const noexcept {
-        struct PointerProxy: reference {
+        struct ProxyPointer: reference {
             using reference::reference;
-            const PointerProxy* operator->() const noexcept {
+            const ProxyPointer* operator->() const noexcept {
                 return this;
             }
         };
-        return PointerProxy{*it1, *it2};
+        return ProxyPointer{*it1, *it2};
     }
 
     constexpr ZipIterator& operator++() noexcept {
@@ -305,6 +261,13 @@ constexpr ZipIterator<Iter1, Iter2> operator+(
     return it + d;
 }
 
+template<std::unsigned_integral I>
+struct Key {
+    using idx_type = I;
+    I idx;
+    constexpr auto operator<=>(const Key&) const noexcept = default;
+};
+
 template<typename Key, typename Value>
 struct EmplaceResult {
     Key key;
@@ -352,24 +315,18 @@ concept SlotMapHasData = HasData<typename SlotMap::ObjC>;
 
 template<
     typename T,
-    unsigned IdxBits,
-    unsigned GenBits,
+    typename I,
     template <typename> typename ObjectContainer,
     template <typename> typename KeyContainer
 >
 concept SlotMapRequires =
+    std::unsigned_integral<I> and
     std::is_nothrow_move_constructible_v<T> and
     std::is_nothrow_move_assignable_v<T> and
-    (IdxBits + GenBits <= 64) and
-    (IdxBits > 0) and
-    (GenBits > 0) and
     requires (ObjectContainer<T> c) {
         { std::ranges::swap(c, c) } noexcept;
     } and
-    requires (KeyContainer<typename Detail::Key<IdxBits, GenBits>> c) {
-        { std::ranges::swap(c, c) } noexcept;
-    } and
-    requires (KeyContainer<typename Detail::Key<IdxBits, GenBits>::idx_type> c) {
+    requires (KeyContainer<I> c) {
         { std::ranges::swap(c, c) } noexcept;
     };
 
@@ -379,30 +336,29 @@ using StdVector = std::vector<T>;
 
 #define SLOTMAP_TEMPLATE template<\
     typename T,\
-    unsigned I,\
-    unsigned G,\
+    std::unsigned_integral I,\
     template <typename> typename O,\
     template <typename> typename K\
-> requires Detail::SlotMapRequires<T, I, G, O, K>
-#define SLOTMAP SlotMap<T, I, G, O, K>
+> requires Detail::SlotMapRequires<T, I, O, K>
+#define SLOTMAP SlotMap<T, I, O, K>
 
 SLOTMAP_TEMPLATE
 class SlotMapBase {
 protected:
-    using Key   = Detail::Key<I, G>;
+    using Key   = Detail::Key<I>;
     using IdxT  = Key::idx_type;
-    using GenT  = Key::gen_type;
 
     using ObjC  = O<T>;
+    using IdxC  = K<IdxT>;
     using KeyC  = K<Key>;
 
     ObjC m_objects;
-    KeyC m_indices;
+    IdxC m_indices;
     KeyC m_keys;
 
     constexpr IdxT index(Key k) const noexcept {
         assert(k.idx < m_indices.size());
-        auto idx = m_indices[k.idx].idx;
+        auto idx = m_indices[k.idx];
         assert(idx < m_objects.size());
         return idx;
     }
@@ -419,16 +375,14 @@ public:
 
 template<
     typename T,
-    unsigned IdxBits = 24,
-    unsigned GenBits = 8,
+    typename KeyType = unsigned,
     template <typename> typename ObjectContainer = Detail::StdVector,
     template <typename> typename KeyContainer    = Detail::StdVector
-> requires Detail::SlotMapRequires<T, IdxBits, GenBits, ObjectContainer, KeyContainer>
-class SlotMap: public SlotMapBase<T, IdxBits, GenBits, ObjectContainer, KeyContainer> {
-    using Base = SlotMapBase<T, IdxBits, GenBits, ObjectContainer, KeyContainer>;
+> requires Detail::SlotMapRequires<T, KeyType, ObjectContainer, KeyContainer>
+class SlotMap: public SlotMapBase<T, KeyType, ObjectContainer, KeyContainer> {
+    using Base = SlotMapBase<T, KeyType, ObjectContainer, KeyContainer>;
     using typename Base::Key;
     using typename Base::IdxT;
-    using typename Base::GenT;
     using Base::m_objects;
     using Base::m_indices;
     using Base::m_keys;
@@ -447,7 +401,7 @@ class SlotMap: public SlotMapBase<T, IdxBits, GenBits, ObjectContainer, KeyConta
     using const_value_iterator  = std::ranges::iterator_t<const_value_view>;
     using value_iterator        = std::ranges::iterator_t<value_view>;
 
-    static constexpr IdxT free_list_null = Key::max_idx;
+    static constexpr IdxT free_list_null = std::numeric_limits<KeyType>::max();
     IdxT m_free_list_head = free_list_null;
 
 public:
@@ -480,7 +434,7 @@ public:
     }
 
     constexpr bool empty() const noexcept { return begin() == end(); }
-    constexpr size_type size() const noexcept { return std::distance(begin(), end()); }
+    constexpr size_type size() const noexcept { return std::ranges::distance(begin(), end()); }
     static constexpr size_type max_size() noexcept { return free_list_null - 1; }
     constexpr void reserve(size_type sz)
         requires Detail::SlotMapCanReserve<SlotMap>;
@@ -502,8 +456,8 @@ public:
     constexpr value_type pop(key_type k) noexcept;
     constexpr void swap(SlotMap& other) noexcept;
 
-    constexpr const_iterator access(key_type k) const noexcept { return std::next(begin(), index(k)); }
-    constexpr iterator access(key_type k) noexcept { return std::next(begin(), index(k)); };
+    constexpr const_iterator access(key_type k) const noexcept { return std::ranges::next(begin(), index(k)); }
+    constexpr iterator access(key_type k) noexcept { return std::ranges::next(begin(), index(k)); };
     constexpr const_iterator find(key_type k) const noexcept;
     constexpr iterator find(key_type k) noexcept;
     constexpr const T& operator[](key_type k) const noexcept { return m_objects[index(k)]; }
@@ -527,7 +481,6 @@ namespace Detail {
 using VectorIterator = std::vector<int>::iterator;
 using TestIterator = SlotMap<int>::iterator;
 using TestReference = TestIterator::reference;
-
 static_assert(std::input_iterator<TestIterator>);
 static_assert(std::forward_iterator<TestIterator>);
 static_assert(std::bidirectional_iterator<TestIterator>);
@@ -577,11 +530,8 @@ constexpr void SLOTMAP::clear() noexcept {
     m_objects.clear();
     // Push all objects into free list
     for (auto key: m_keys) {
-        m_indices[key.idx] = {
-            .gen = ++key.gen,
-            .idx = m_free_list_head,
-        };
-        m_free_list_head = key.idx;
+        m_indices[key.idx] =
+            std::exchange(m_free_list_head, key.idx);
     }
     m_keys.clear();
 }
@@ -595,7 +545,7 @@ constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
     // Reserve space in key-index map
     if (m_free_list_head == free_list_null) {
         IdxT free_list_next = m_indices.size();
-        m_indices.emplace_back().idx =
+        m_indices.emplace_back() =
             std::exchange(m_free_list_head, free_list_next);
     }
 
@@ -603,14 +553,14 @@ constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
     m_keys.resize(obj_idx + 1);
 
     auto idx_idx = m_free_list_head;
-    auto [gen, free_list_next] = m_indices[idx_idx];
+    auto free_list_next = m_indices[idx_idx];
 
     // Insert object into object array
     auto& ref = m_objects.emplace_back(std::forward<Args>(args)...);
     // Insert object into index-key map
-    auto key = m_keys.back() = { .gen = gen, .idx = idx_idx };
+    auto key = m_keys.back() = { .idx = idx_idx };
     // Insert object into key-index map
-    m_indices[idx_idx].idx = obj_idx;
+    m_indices[idx_idx] = obj_idx;
     // Update free list
     m_free_list_head = free_list_next;
 
@@ -622,9 +572,9 @@ constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
 
 SLOTMAP_TEMPLATE
 constexpr auto SLOTMAP::erase(iterator it) noexcept -> iterator {
-    auto erase_obj_idx = std::distance(begin(), it);
+    auto erase_obj_idx = std::ranges::distance(begin(), it);
     erase_impl(erase_obj_idx);
-    return std::next(begin(), erase_obj_idx);
+    return std::ranges::next(begin(), erase_obj_idx);
 }
 
 SLOTMAP_TEMPLATE
@@ -653,14 +603,11 @@ constexpr void SLOTMAP::erase_index_and_key(IdxT erase_obj_idx) noexcept {
     m_keys.pop_back();
 
     // Update key-index map for back object
-    m_indices[back_key.idx].idx = erase_obj_idx;
+    m_indices[back_key.idx] = erase_obj_idx;
 
     // Erase object from key-index map and update free list
-    m_indices[erase_key.idx] = {
-        .gen = ++erase_key.gen,
-        .idx = m_free_list_head,
-    };
-    m_free_list_head = erase_key.idx;
+    m_indices[erase_key.idx] =
+        std::exchange(m_free_list_head, erase_key.idx);
 }
 
 SLOTMAP_TEMPLATE
@@ -672,12 +619,10 @@ constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
 }
 
 #define SLOTMAP_FIND(k) \
-    auto [key_gen, idx_idx] = k;\
-    if (idx_idx < m_indices.size()) {\
-        auto [gen, obj_idx] = m_indices[idx_idx];\
-        if (key_gen == gen) {\
-            auto it = std::next(begin(), obj_idx);\
-            assert(it < end());\
+    if (k.idx < m_indices.size()) {\
+        auto obj_idx = m_indices[k.idx];\
+        auto it = std::ranges::next(begin(), obj_idx);\
+        if (it < end() and it->first == k) {\
             return it;\
         }\
     }\

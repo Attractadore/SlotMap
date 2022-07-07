@@ -3,9 +3,9 @@
 #include <gtest/gtest.h>
 
 namespace Attractadore::SlotMapNameSpace::Detail {
-template<unsigned I, unsigned G>
-std::ostream& operator<<(std::ostream& os, Key<I, G> key) {
-    os << "idx: " << key.idx << ", gen: " << key.gen;
+template<std::unsigned_integral I>
+std::ostream& operator<<(std::ostream& os, Key<I> key) {
+    os << "idx: " << key.idx;
     return os;
 }
 }
@@ -14,7 +14,7 @@ template<typename T>
 using Vector = std::vector<T>;
 
 template<typename T>
-using SlotMap = Attractadore::SlotMap<T, 24, 8, Vector, Vector>;
+using SlotMap = Attractadore::SlotMap<T, unsigned, Vector, Vector>;
 
 TEST(TestIsEmpty, Empty) {
     SlotMap<int> s;
@@ -125,6 +125,7 @@ TEST(TestInsert, ValueAfterAllInsert) {
 }
 
 TEST(TestInsert, InsertAfterErase) {
+#if 0
     SlotMap<int> s;
 
     auto base_k = s.insert(0);
@@ -142,6 +143,7 @@ TEST(TestInsert, InsertAfterErase) {
 
     EXPECT_EQ(base_it->second, 0);
     EXPECT_EQ(new_it->second, 2);
+#endif
 }
 
 TEST(TestEmplace, Emplace) {
@@ -154,6 +156,7 @@ TEST(TestEmplace, Emplace) {
 }
 
 TEST(TestEmplace, EmplaceAfterErase) {
+#if 0
     SlotMap<int> s;
 
     auto base_k = s.emplace(0).key;
@@ -171,6 +174,7 @@ TEST(TestEmplace, EmplaceAfterErase) {
 
     EXPECT_EQ(base_it->second, 0);
     EXPECT_EQ(new_it->second, 2);
+#endif
 }
 
 TEST(TestErase, EraseIterator) {
@@ -261,7 +265,6 @@ TEST(TestFind, FindNotPresent) {
     auto val = 0xffdead;
     auto k = s.insert(val);
     s.erase(k);
-    auto new_k = s.insert(val);
     auto it = s.find(k);
     EXPECT_EQ(it, s.end());
 }
@@ -350,6 +353,7 @@ TEST(TestCompare, DifferentSame) {
 }
 
 TEST(TestCompare, DifferentSameButOlder) {
+#if 0
     SlotMap<int> s1;
     for (int i = 0; i < 16; i++) {
         auto k = s1.insert(i);
@@ -370,9 +374,11 @@ TEST(TestCompare, DifferentSameButOlder) {
     }
     EXPECT_EQ(s2.size(), 16);
     EXPECT_EQ(s1, s2);
+#endif
 }
 
 TEST(TestCompare, DifferentSameButCleared) {
+#if 0
     SlotMap<int> s1;
     for (int i = 0; i < 16; i++) {
         auto k = s1.insert(i);
@@ -387,6 +393,7 @@ TEST(TestCompare, DifferentSameButCleared) {
         auto k = s2.insert(i);
     }
     EXPECT_EQ(s1, s2);
+#endif
 }
 
 TEST(TestPop, Pop) {
