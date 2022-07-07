@@ -2,10 +2,10 @@
 
 #include <gtest/gtest.h>
 
-namespace Attractadore::SlotMapNameSpace::Detail {
-template<std::unsigned_integral I>
+namespace Attractadore::SlotMapNameSpace {
+template<typename I>
 std::ostream& operator<<(std::ostream& os, Key<I> key) {
-    os << "idx: " << key.idx;
+    os << "idx: " << std::bit_cast<I>(key);
     return os;
 }
 }
