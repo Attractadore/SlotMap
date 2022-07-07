@@ -2,8 +2,11 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <ranges>
 #include <utility>
 #include <vector>
+
+#include <iostream>
 
 namespace Attractadore {
 namespace SlotMapNameSpace {
@@ -47,7 +50,260 @@ struct Key {
             return idx_order;
         }
     }
+    constexpr bool operator==(const Key& other) const noexcept = default;
 };
+
+template<typename T1, typename T2>
+struct cpp23_pair: public std::pair<T1, T2> {
+    using typename std::pair<T1, T2>::first_type;
+    using typename std::pair<T1, T2>::second_type;
+    using std::pair<T1, T2>::first;
+    using std::pair<T1, T2>::second;
+    using std::pair<T1, T2>::pair;
+
+    template<typename U1, typename U2>
+    constexpr cpp23_pair(std::pair<U1, U2>& p):
+        std::pair<T1, T2>::pair(p.first, p.second) {}
+    template<typename U1, typename U2>
+    constexpr cpp23_pair(const std::pair<U1, U2>&& p):
+        std::pair<T1, T2>::pair(std::forward<const U1>(p.first), std::forward<const U2>(p.second)) {}
+
+    constexpr const cpp23_pair& operator=(const std::pair<T1, T2>& other) const requires
+        std::is_copy_assignable_v<const T1> and
+        std::is_copy_assignable_v<const T2>
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    template<typename U1, typename U2>
+    constexpr const cpp23_pair& operator=(const std::pair<U1, U2>& other) const requires
+        std::is_assignable_v<const T1&, const U1&> and
+        std::is_assignable_v<const T2&, const U2&>
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    constexpr const cpp23_pair& operator=(std::pair<T1, T2>&& other) const requires
+        std::is_assignable_v<const T1&, T1> and
+        std::is_assignable_v<const T2&, T2>
+    {
+        first = other.first;
+        second = other.second;
+        return *this;
+    }
+
+    template<typename U1, typename U2>
+    constexpr const cpp23_pair& operator=(std::pair<U1, U2>&& other) const requires
+        std::is_assignable_v<const T1&, U1> and
+        std::is_assignable_v<const T2&, U2>
+    {
+        first = std::forward<U1>(other.first);
+        second = std::forward<U2>(other.second);
+        return *this;
+    }
+
+    constexpr void swap(const std::pair<T1, T2>& other) const noexcept (
+        std::is_nothrow_swappable_v<const first_type> and
+        std::is_nothrow_swappable_v<const second_type>
+    ) requires
+        std::is_swappable_v<const T1> and
+        std::is_swappable_v<const T2>
+    {
+        using std::swap;
+        swap(first, other.first);
+        swap(second, other.second);
+    }
+};
+
+template<typename T1, typename T2>
+constexpr void swap(cpp23_pair<T1,T2>& l, cpp23_pair<T1,T2>& r) noexcept (
+    noexcept(l.swap(r))
+) requires
+    std::is_swappable_v<typename cpp23_pair<T1, T2>::first_type> and
+    std::is_swappable_v<typename cpp23_pair<T1, T2>::second_type>
+{
+    l.swap(r);
+}
+
+template<typename T1, typename T2>
+constexpr void swap(const cpp23_pair<T1,T2>& l, const cpp23_pair<T1,T2>& r) noexcept (
+    noexcept(l.swap(r))
+) requires
+    std::is_swappable_v<const typename cpp23_pair<T1,T2>::first_type> and
+    std::is_swappable_v<const typename cpp23_pair<T1,T2>::second_type>
+{
+    l.swap(r);
+}
+}
+}
+}
+
+template<
+    typename T1, typename T2,
+    typename U1, typename U2,
+    template<typename> typename TQual,
+    template<typename> typename UQual
+> requires requires {
+    typename Attractadore::SlotMapNameSpace::Detail::cpp23_pair<
+        std::common_reference_t<TQual<T1>, UQual<U1>>,
+        std::common_reference_t<TQual<T2>, UQual<U2>>>;
+}
+struct std::basic_common_reference<
+    Attractadore::SlotMapNameSpace::Detail::cpp23_pair<T1, T2>,
+    Attractadore::SlotMapNameSpace::Detail::cpp23_pair<U1, U2>,
+    TQual,
+    UQual>
+{
+    using type = Attractadore::SlotMapNameSpace::Detail::cpp23_pair<
+        std::common_reference_t<TQual<T1>, UQual<U1>>,
+        std::common_reference_t<TQual<T2>, UQual<U2>>>;
+};
+
+namespace Attractadore {
+namespace SlotMapNameSpace {
+namespace Detail {
+template<std::random_access_iterator Iter1, std::random_access_iterator Iter2>
+class ZipIterator {
+    Iter1 it1;
+    Iter2 it2;
+
+    using difference_type1  = std::iter_difference_t<Iter1>;
+    using difference_type2  = std::iter_difference_t<Iter2>;
+    using reference1        = std::iter_reference_t<Iter1>;
+    using reference2        = std::iter_reference_t<Iter2>;
+    using rvalue_reference1 = std::iter_rvalue_reference_t<Iter1>;
+    using rvalue_reference2 = std::iter_rvalue_reference_t<Iter2>;
+    using value_type1       = std::iter_value_t<Iter1>;
+    using value_type2       = std::iter_value_t<Iter2>;
+
+public:
+    using difference_type   = std::common_type_t<difference_type1, difference_type2>;
+    using reference         = cpp23_pair<reference1, reference2>;
+    using rvalue_reference  = cpp23_pair<rvalue_reference1, rvalue_reference2>;
+    using value_type        = cpp23_pair<value_type1, value_type2>;
+
+    ZipIterator(Iter1 it1 = {}, Iter2 it2 = {}): it1{it1}, it2{it2} {}
+
+    // InputIterator
+
+    constexpr reference operator*() const noexcept {
+        return {*it1, *it2};
+    }
+
+    constexpr auto operator->() const noexcept {
+        struct PointerProxy: reference {
+            using reference::reference;
+            const PointerProxy* operator->() const noexcept {
+                return this;
+            }
+        };
+        return PointerProxy{*it1, *it2};
+    }
+
+    constexpr ZipIterator& operator++() noexcept {
+        ++it1;
+        ++it2;
+        return *this;
+    }
+
+    constexpr ZipIterator  operator++(int) const noexcept {
+        auto temp = *this;
+        ++(*this);
+        return temp;
+    }
+
+    // ForwardIterator
+
+    constexpr bool operator==(const ZipIterator& other) const noexcept {
+        bool is_equal1 = it1 == other.it1;
+        bool is_equal2 = it2 == other.it2;
+        assert(is_equal1 == is_equal2);
+        return is_equal1;
+    }
+
+    // BidirectionalIterator
+
+    constexpr ZipIterator& operator--() noexcept {
+        --it1;
+        --it2;
+        return *this;
+    }
+
+    constexpr ZipIterator  operator--(int) const noexcept {
+        auto temp = *this;
+        --(*this);
+        return temp;
+    }
+
+    // RandomAccessIterator
+
+    constexpr std::weak_ordering operator<=>(const ZipIterator& other) const noexcept {
+        auto ord_1 = std::weak_order(it1, other.it1);
+        auto ord_2 = std::weak_order(it2, other.it2);
+        assert(ord_1 == ord_2);
+        return ord_1;
+    }
+
+    constexpr difference_type operator-(const ZipIterator& other) const noexcept {
+        auto d1 = it1 - other.it1;
+        auto d2 = it2 - other.it2;
+        assert(d1 == d2);
+        return d1;
+    }
+
+    constexpr ZipIterator  operator+(difference_type d) const noexcept {
+        auto temp = *this;
+        return temp += d;
+    }
+
+    constexpr ZipIterator  operator-(difference_type d) const noexcept {
+        auto temp = *this;
+        return temp -= d;
+    }
+
+    constexpr ZipIterator& operator+=(difference_type d) noexcept {
+        it1 += d;
+        it2 += d;
+        return *this;
+    }
+
+    constexpr ZipIterator& operator-=(difference_type d) noexcept {
+        it1 -= d;
+        it2 -= d;
+        return *this;
+    }
+
+    constexpr reference operator[](difference_type idx) const noexcept {
+        return {it1[idx], it2[idx]};
+    }
+
+    friend constexpr rvalue_reference iter_move(ZipIterator it) noexcept (
+        noexcept(std::ranges::iter_move(it.it1)) and
+        noexcept(std::ranges::iter_move(it.it2))
+    ) {
+        return {std::ranges::iter_move(it.it1), std::ranges::iter_move(it.it2)};
+    }
+
+    friend constexpr void iter_swap(ZipIterator lit, ZipIterator rit) noexcept (
+        noexcept(std::ranges::iter_swap(lit.it1, rit.it1)) and
+        noexcept(std::ranges::iter_swap(lit.it2, rit.it2))
+    ) {
+        std::ranges::iter_swap(lit.it1, rit.it1);
+        std::ranges::iter_swap(lit.it2, rit.it2);
+    }
+};
+
+template<std::forward_iterator Iter1, std::forward_iterator Iter2>
+constexpr ZipIterator<Iter1, Iter2> operator+(
+    typename ZipIterator<Iter1, Iter2>::difference_type d,
+    ZipIterator<Iter1, Iter2> it
+) noexcept {
+    return it + d;
+}
 
 template<typename Key, typename Value>
 struct EmplaceResult {
@@ -63,7 +319,6 @@ concept HasReserve = requires (C c) {
 template<typename SlotMap>
 concept SlotMapCanReserve =
     HasReserve<typename SlotMap::ObjC> and
-    HasReserve<typename SlotMap::IdxC> and
     HasReserve<typename SlotMap::KeyC>;
 
 template<typename C>
@@ -74,7 +329,6 @@ concept HasCapacity = requires (C c) {
 template<typename SlotMap>
 concept SlotMapHasCapacity =
     HasCapacity<typename SlotMap::ObjC> and
-    HasCapacity<typename SlotMap::IdxC> and
     HasCapacity<typename SlotMap::KeyC>;
 
 template<typename C>
@@ -85,7 +339,6 @@ concept HasShrinkToFit = requires (C c) {
 template<typename SlotMap>
 concept SlotMapCanShrinkToFit =
     HasShrinkToFit<typename SlotMap::ObjC> and
-    HasShrinkToFit<typename SlotMap::IdxC> and
     HasShrinkToFit<typename SlotMap::KeyC>;
 
 template<typename C>
@@ -133,6 +386,37 @@ using StdVector = std::vector<T>;
 > requires Detail::SlotMapRequires<T, I, G, O, K>
 #define SLOTMAP SlotMap<T, I, G, O, K>
 
+SLOTMAP_TEMPLATE
+class SlotMapBase {
+protected:
+    using Key   = Detail::Key<I, G>;
+    using IdxT  = Key::idx_type;
+    using GenT  = Key::gen_type;
+
+    using ObjC  = O<T>;
+    using KeyC  = K<Key>;
+
+    ObjC m_objects;
+    KeyC m_indices;
+    KeyC m_keys;
+
+    constexpr IdxT index(Key k) const noexcept {
+        assert(k.idx < m_indices.size());
+        auto idx = m_indices[k.idx].idx;
+        assert(idx < m_objects.size());
+        return idx;
+    }
+
+    constexpr auto keys_view() const noexcept {
+        return std::views::take(m_objects.size());
+    }
+
+public:
+    constexpr auto keys() const noexcept { return m_keys | keys_view(); }
+    constexpr auto values() const noexcept { return std::views::all(m_objects); }
+    constexpr auto values() noexcept { return std::views::all(m_objects); }
+};
+
 template<
     typename T,
     unsigned IdxBits = 24,
@@ -140,42 +424,64 @@ template<
     template <typename> typename ObjectContainer = Detail::StdVector,
     template <typename> typename KeyContainer    = Detail::StdVector
 > requires Detail::SlotMapRequires<T, IdxBits, GenBits, ObjectContainer, KeyContainer>
-class SlotMap {
-    using Key   = Detail::Key<IdxBits, GenBits>;
-    using IdxT  = Key::idx_type;
-    using GenT  = Key::gen_type;
+class SlotMap: public SlotMapBase<T, IdxBits, GenBits, ObjectContainer, KeyContainer> {
+    using Base = SlotMapBase<T, IdxBits, GenBits, ObjectContainer, KeyContainer>;
+    using typename Base::Key;
+    using typename Base::IdxT;
+    using typename Base::GenT;
+    using Base::m_objects;
+    using Base::m_indices;
+    using Base::m_keys;
+    using Base::index;
 
-    using ObjC  = ObjectContainer<T>;
-    using IdxC  = KeyContainer<Key>;
-    using KeyC  = KeyContainer<IdxT>;
+    using key_view              = decltype(std::declval<const Base*>()->keys());
+    using const_value_view      = decltype(std::declval<const Base*>()->values());
+    using value_view            = decltype(std::declval<Base*>()->values());
+    static_assert(std::ranges::borrowed_range<key_view>);
+    static_assert(std::ranges::borrowed_range<const_value_view>);
+    static_assert(std::ranges::borrowed_range<value_view>);
+
+    using const_key_iterator    = std::ranges::iterator_t<key_view>;
+    using key_iterator          = std::ranges::iterator_t<key_view>;
+
+    using const_value_iterator  = std::ranges::iterator_t<const_value_view>;
+    using value_iterator        = std::ranges::iterator_t<value_view>;
 
     static constexpr IdxT free_list_null = Key::max_idx;
-
-    ObjC objects;
-    IdxC indices;
-    KeyC keys;
-    IdxT free_list_head = free_list_null;
+    IdxT m_free_list_head = free_list_null;
 
 public:
     using key_type          = Key;
     using value_type        = T;
     using const_reference   = const T&;
     using reference         = T&;
-    using const_iterator    = ObjC::const_iterator;
-    using iterator          = ObjC::iterator;
-    using size_type         = IdxT;
+
+    using const_iterator    = Detail::ZipIterator<const_key_iterator, const_value_iterator>;
+    using iterator          = Detail::ZipIterator<key_iterator, value_iterator>;
+
+    using difference_type   = std::iter_difference_t<iterator>;
+    using size_type         = std::make_signed_t<difference_type>;
+
     using emplace_result    = Detail::EmplaceResult<key_type, value_type>;
 
-    constexpr const_iterator cbegin() const noexcept { return objects.cbegin(); }
-    constexpr const_iterator cend() const noexcept { return objects.cend(); }
-    constexpr const_iterator begin() const noexcept { return objects.begin(); }
-    constexpr const_iterator end() const noexcept { return objects.end(); }
-    constexpr iterator begin() noexcept { return objects.begin(); }
-    constexpr iterator end() noexcept { return objects.end(); }
+    constexpr const_iterator cbegin() const noexcept { return begin(); }
+    constexpr const_iterator cend() const noexcept { return end(); }
+    constexpr const_iterator begin() const noexcept {
+        return { keys().begin(), values().begin() };
+    }
+    constexpr const_iterator end() const noexcept {
+        return { keys().end(), values().end() };
+    }
+    constexpr iterator begin() noexcept { return {
+        keys().begin(), values().begin() };
+    }
+    constexpr iterator end() noexcept { return {
+        keys().end(), values().end() };
+    }
 
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr size_type size() const noexcept { return std::distance(begin(), end()); }
-    static constexpr size_type max_size() noexcept { return Key::max_idx - 1; }
+    static constexpr size_type max_size() noexcept { return free_list_null - 1; }
     constexpr void reserve(size_type sz)
         requires Detail::SlotMapCanReserve<SlotMap>;
     constexpr size_type capacity() const noexcept
@@ -200,36 +506,41 @@ public:
     constexpr iterator access(key_type k) noexcept { return std::next(begin(), index(k)); };
     constexpr const_iterator find(key_type k) const noexcept;
     constexpr iterator find(key_type k) noexcept;
-    constexpr const T& operator[](key_type k) const noexcept { return objects[index(k)]; }
-    constexpr T& operator[](key_type k) noexcept { return objects[index(k)]; }
+    constexpr const T& operator[](key_type k) const noexcept { return m_objects[index(k)]; }
+    constexpr T& operator[](key_type k) noexcept { return m_objects[index(k)]; }
     constexpr bool contains(key_type k) const noexcept { return find(k) != end(); };
     constexpr const value_type* data() const noexcept
-        requires Detail::SlotMapHasData<SlotMap> { return objects.data(); }
+        requires Detail::SlotMapHasData<SlotMap> { return m_objects.data(); }
     constexpr value_type* data() noexcept
-        requires Detail::SlotMapHasData<SlotMap> { return objects.data(); }
+        requires Detail::SlotMapHasData<SlotMap> { return m_objects.data(); }
+    using Base::keys;
+    using Base::values;
 
     constexpr bool operator==(const SlotMap& other) const noexcept;
-    constexpr bool operator!=(const SlotMap& other) const noexcept { return not (*this == other); }
 
 private:
     constexpr void erase_impl(IdxT erase_obj_idx) noexcept;
     constexpr void erase_index_and_key(IdxT erase_obj_idx) noexcept;
-
-    constexpr IdxT index(key_type k) const noexcept {
-        assert(k.idx < indices.size());
-        auto idx = indices[k.idx].idx;
-        assert(idx < objects.size());
-        return idx;
-    }
 };
+
+namespace Detail {
+using VectorIterator = std::vector<int>::iterator;
+using TestIterator = SlotMap<int>::iterator;
+using TestReference = TestIterator::reference;
+
+static_assert(std::input_iterator<TestIterator>);
+static_assert(std::forward_iterator<TestIterator>);
+static_assert(std::bidirectional_iterator<TestIterator>);
+static_assert(std::random_access_iterator<TestIterator>);
+}
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::reserve(size_type sz)
     requires Detail::SlotMapCanReserve<SLOTMAP>
 {
-    objects.reserve(sz);
-    indices.reserve(sz);
-    keys.reserve(sz);
+    m_objects.reserve(sz);
+    m_indices.reserve(sz);
+    m_keys.reserve(sz);
 }
 
 SLOTMAP_TEMPLATE
@@ -237,15 +548,15 @@ constexpr auto SLOTMAP::capacity() const noexcept -> size_type
     requires Detail::SlotMapHasCapacity<SLOTMAP>
 {
     auto cap = max_size();
-    auto obj_cap = objects.capacity();
+    auto obj_cap = m_objects.capacity();
     if (obj_cap < cap) {
         cap = obj_cap;
     }
-    auto idx_cap = indices.capacity();
+    auto idx_cap = m_indices.capacity();
     if (idx_cap < cap) {
         cap = idx_cap;
     }
-    auto key_cap = keys.capacity();
+    auto key_cap = m_keys.capacity();
     if (key_cap < cap) {
         cap = key_cap;
     }
@@ -254,57 +565,57 @@ constexpr auto SLOTMAP::capacity() const noexcept -> size_type
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::shrink_to_fit()
-    requires Detail::SlotMapCanShrinkToFit<SLOTMAP> 
+    requires Detail::SlotMapCanShrinkToFit<SLOTMAP>
 {
-    objects.shrink_to_fit();
-    indices.shrink_to_fit();
-    keys.shrink_to_fit();
+    m_objects.shrink_to_fit();
+    m_indices.shrink_to_fit();
+    m_keys.shrink_to_fit();
 }
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::clear() noexcept {
-    objects.clear();
+    m_objects.clear();
     // Push all objects into free list
-    for (auto idx_idx: keys) {
-        indices[idx_idx].gen++;
-        indices[idx_idx].idx = std::exchange(free_list_head, idx_idx);
+    for (auto key: m_keys) {
+        m_indices[key.idx] = {
+            .gen = ++key.gen,
+            .idx = m_free_list_head,
+        };
+        m_free_list_head = key.idx;
     }
-    keys.clear();
+    m_keys.clear();
 }
 
 SLOTMAP_TEMPLATE
 template<typename... Args>
     requires std::constructible_from<T, Args&&...>
 constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
-    IdxT obj_idx = objects.size();
+    IdxT obj_idx = m_objects.size();
 
     // Reserve space in key-index map
-    if (free_list_head == free_list_null) {
-        IdxT free_list_next = indices.size();
-        indices.emplace_back().idx =
-            std::exchange(free_list_head, free_list_next);
+    if (m_free_list_head == free_list_null) {
+        IdxT free_list_next = m_indices.size();
+        m_indices.emplace_back().idx =
+            std::exchange(m_free_list_head, free_list_next);
     }
 
     // Reserve space in index-key map
-    keys.resize(obj_idx + 1);
+    m_keys.resize(obj_idx + 1);
 
-    auto idx_idx = free_list_head;
-    auto [gen, free_list_next] = indices[idx_idx];
+    auto idx_idx = m_free_list_head;
+    auto [gen, free_list_next] = m_indices[idx_idx];
 
     // Insert object into object array
-    auto& ref = objects.emplace_back(std::forward<Args>(args)...);
+    auto& ref = m_objects.emplace_back(std::forward<Args>(args)...);
     // Insert object into index-key map
-    keys.back() = idx_idx;
+    auto key = m_keys.back() = { .gen = gen, .idx = idx_idx };
     // Insert object into key-index map
-    indices[idx_idx].idx = obj_idx;
+    m_indices[idx_idx].idx = obj_idx;
     // Update free list
-    free_list_head = free_list_next;
+    m_free_list_head = free_list_next;
 
     return {
-        .key = {
-            .gen = gen,
-            .idx = idx_idx,
-        },
+        .key = key,
         .reference = ref,
     };
 }
@@ -320,8 +631,8 @@ SLOTMAP_TEMPLATE
 constexpr auto SLOTMAP::pop(key_type k) noexcept -> value_type {
     auto erase_obj_idx = index(k);
     // Erase object from object array
-    auto temp = std::exchange(objects[erase_obj_idx], objects.back());
-    objects.pop_back();
+    auto temp = std::exchange(m_objects[erase_obj_idx], m_objects.back());
+    m_objects.pop_back();
     erase_index_and_key(erase_obj_idx);
     return temp;
 }
@@ -329,42 +640,41 @@ constexpr auto SLOTMAP::pop(key_type k) noexcept -> value_type {
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::erase_impl(IdxT erase_obj_idx) noexcept {
     // Erase object from object array
-    std::ranges::swap(objects[erase_obj_idx], objects.back());
-    objects.pop_back();
+    std::ranges::swap(m_objects[erase_obj_idx], m_objects.back());
+    m_objects.pop_back();
     erase_index_and_key(erase_obj_idx);
 }
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::erase_index_and_key(IdxT erase_obj_idx) noexcept {
     // Erase object from index-key map
-    auto back_idx_idx = keys.back();
-    auto erase_idx_idx =
-        std::exchange(keys[erase_obj_idx], back_idx_idx);
-    keys.pop_back();
+    auto back_key = m_keys.back();
+    auto erase_key = std::exchange(m_keys[erase_obj_idx], back_key);
+    m_keys.pop_back();
 
     // Update key-index map for back object
-    indices[back_idx_idx].idx = erase_obj_idx;
+    m_indices[back_key.idx].idx = erase_obj_idx;
 
     // Erase object from key-index map and update free list
-    GenT gen = indices[erase_idx_idx].gen + 1;
-    indices[erase_idx_idx] = {
-        .gen = gen,
-        .idx = std::exchange(free_list_head, erase_idx_idx),
+    m_indices[erase_key.idx] = {
+        .gen = ++erase_key.gen,
+        .idx = m_free_list_head,
     };
+    m_free_list_head = erase_key.idx;
 }
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::swap(SLOTMAP& other) noexcept {
-    std::ranges::swap(objects, other.objects);
-    std::ranges::swap(indices, other.indices);
-    std::ranges::swap(keys, other.keys);
-    std::ranges::swap(free_list_head, other.free_list_head);
+    std::ranges::swap(m_objects, other.m_objects);
+    std::ranges::swap(m_indices, other.m_indices);
+    std::ranges::swap(m_keys, other.m_keys);
+    std::ranges::swap(m_free_list_head, other.m_free_list_head);
 }
 
 #define SLOTMAP_FIND(k) \
     auto [key_gen, idx_idx] = k;\
-    if (idx_idx < indices.size()) {\
-        auto [gen, obj_idx] = indices[idx_idx];\
+    if (idx_idx < m_indices.size()) {\
+        auto [gen, obj_idx] = m_indices[idx_idx];\
         if (key_gen == gen) {\
             auto it = std::next(begin(), obj_idx);\
             assert(it < end());\
@@ -386,9 +696,7 @@ constexpr auto SLOTMAP::find(key_type k) noexcept -> iterator {
 
 SLOTMAP_TEMPLATE
 constexpr bool SLOTMAP::operator==(const SlotMap& other) const noexcept {
-    return std::is_permutation(
-        objects.begin(), objects.end(),
-        other.objects.begin(), other.objects.end());
+    return std::ranges::is_permutation(*this, other);
 }
 
 SLOTMAP_TEMPLATE

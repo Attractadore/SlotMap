@@ -88,7 +88,8 @@ TEST(TestClear, ValueAfterInsertAfterClear) {
         auto it = s.find(k);
         ASSERT_NE(it, s.end()) <<
             "Iterator for value " << v << " and key (" << k << ") is end()";
-        EXPECT_EQ(*it, v);
+        EXPECT_EQ(it->first, k);
+        EXPECT_EQ(it->second, v);
     }
 }
 
@@ -100,7 +101,8 @@ TEST(TestInsert, ValueAfterInsert) {
         auto it = s.find(k);
         ASSERT_NE(it, s.end()) <<
             "Iterator for value " << v << " and key (" << k << ") is end()";
-        EXPECT_EQ(*it, v);
+        EXPECT_EQ(it->first, k);
+        EXPECT_EQ(it->second, v);
     }
 }
 
@@ -117,7 +119,8 @@ TEST(TestInsert, ValueAfterAllInsert) {
         auto it = s.find(k);
         ASSERT_NE(it, s.end()) <<
             "Iterator for value " << v << " and key (" << k << ") is end()";
-        EXPECT_EQ(*it, v);
+        EXPECT_EQ(it->first, k);
+        EXPECT_EQ(it->second, v);
     }
 }
 
@@ -137,8 +140,8 @@ TEST(TestInsert, InsertAfterErase) {
     ASSERT_EQ(old_it, s.end());
     ASSERT_NE(new_it, s.end());
 
-    EXPECT_EQ(*base_it, 0);
-    EXPECT_EQ(*new_it, 2);
+    EXPECT_EQ(base_it->second, 0);
+    EXPECT_EQ(new_it->second, 2);
 }
 
 TEST(TestEmplace, Emplace) {
@@ -166,8 +169,8 @@ TEST(TestEmplace, EmplaceAfterErase) {
     ASSERT_EQ(old_it, s.end());
     ASSERT_NE(new_it, s.end());
 
-    EXPECT_EQ(*base_it, 0);
-    EXPECT_EQ(*new_it, 2);
+    EXPECT_EQ(base_it->second, 0);
+    EXPECT_EQ(new_it->second, 2);
 }
 
 TEST(TestErase, EraseIterator) {
@@ -250,7 +253,7 @@ TEST(TestFind, FindPresent) {
     auto k = s.insert(val);
     auto it = s.find(k);
     ASSERT_NE(it, s.end());
-    EXPECT_EQ(*it, val);
+    EXPECT_EQ(it->second, val);
 }
 
 TEST(TestFind, FindNotPresent) {
@@ -351,17 +354,21 @@ TEST(TestCompare, DifferentSameButOlder) {
     for (int i = 0; i < 16; i++) {
         auto k = s1.insert(i);
     }
+    EXPECT_EQ(s1.size(), 16);
     for (auto it = s1.begin(); it != s1.end();) {
         it = s1.erase(it);
     }
+    EXPECT_TRUE(s1.empty());
     for (int i = 0; i < 16; i++) {
         auto k = s1.insert(i);
     }
+    EXPECT_EQ(s1.size(), 16);
     SlotMap<int> s2;
     for (int i = 0; i < 16; i++) {
         EXPECT_NE(s1, s2);
         auto k = s2.insert(i);
     }
+    EXPECT_EQ(s2.size(), 16);
     EXPECT_EQ(s1, s2);
 }
 
@@ -411,4 +418,15 @@ TEST(TestPop, PopAll) {
         EXPECT_EQ(v, values[i]);
     }
     EXPECT_TRUE(s.empty());
+}
+
+TEST(TestKeysValues, KeysValues) {
+    SlotMap<int> s;
+    std::vector values = {0, 1, 2, 3, 4};
+    std::vector<decltype(s)::key_type> keys;
+    for (auto v: values) {
+        keys.push_back(s.insert(v));
+    }
+    EXPECT_TRUE(std::ranges::is_permutation(s.keys(), keys));
+    EXPECT_TRUE(std::ranges::is_permutation(s.values(), values));
 }
