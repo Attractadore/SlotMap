@@ -261,6 +261,8 @@ struct ContainerView: private Container {
     constexpr auto cend() const noexcept { return end(); }
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr auto size() const noexcept { return std::ranges::distance(begin(), end()); }
+    constexpr decltype(auto) operator[](Container::size_type idx) const noexcept { return begin()[idx]; }
+    constexpr decltype(auto) operator[](Container::size_type idx) noexcept { return begin()[idx]; }
 };
 
 template<std::unsigned_integral I>
