@@ -1,9 +1,7 @@
 #pragma once
 #include <algorithm>
 #include <cassert>
-#include <ranges>
 #include <utility>
-#include <vector>
 
 namespace Attractadore::SlotMapNameSpace {
 template<typename T1, typename T2>
@@ -254,6 +252,17 @@ constexpr ZipIterator<Iter1, Iter2> operator+(
     return it + d;
 }
 
+template<typename Container, typename Friend>
+struct ContainerView: private Container {
+    friend Friend;
+    using Container::begin;
+    using Container::end;
+    constexpr auto cbegin() const noexcept { return begin(); }
+    constexpr auto cend() const noexcept { return end(); }
+    constexpr bool empty() const noexcept { return begin() == end(); }
+    constexpr auto size() const noexcept { return std::ranges::distance(begin(), end()); }
+};
+
 template<std::unsigned_integral I>
 struct Key {
     using idx_type = I;
@@ -340,29 +349,31 @@ protected:
     using ObjC          = O<T>;
     using IdxC          = K<index_type>;
     using KeyC          = K<key_type>;
+    using ObjV          = ContainerView<ObjC, SlotMapBase>;
+    using IdxV          = ContainerView<IdxC, SlotMapBase>;
+    using KeyV          = ContainerView<KeyC, SlotMapBase>;
 
     ObjC m_objects;
     IdxC m_indices;
     KeyC m_keys;
 
-    constexpr auto keys_view() const noexcept {
-        return std::views::take(m_objects.size());
-    }
-
 public:
-    constexpr auto keys() const noexcept { return m_keys | keys_view(); }
-    constexpr auto values() const noexcept { return std::views::all(m_objects); }
-    constexpr auto values() noexcept { return std::views::all(m_objects); }
+    constexpr const KeyV& keys() const noexcept {
+        return static_cast<const KeyV&>(m_keys);
+    }
+    constexpr const ObjV& values() const noexcept {
+        return static_cast<const ObjV&>(m_objects);
+    }
+    constexpr ObjV& values() noexcept {
+        return static_cast<ObjV&>(m_objects);
+    }
 };
-
-template<typename T>
-using StdVector = std::vector<T>;
 
 template<
     typename T,
-    std::unsigned_integral KeyType = unsigned,
-    template <typename> typename ObjectContainer = SlotMapNameSpace::StdVector,
-    template <typename> typename KeyContainer    = SlotMapNameSpace::StdVector
+    std::unsigned_integral KeyType,
+    template <typename> typename ObjectContainer,
+    template <typename> typename KeyContainer = ObjectContainer
 > requires SlotMapRequires<T, KeyType, ObjectContainer, KeyContainer>
 class SlotMap: public SlotMapBase<T, KeyType, ObjectContainer, KeyContainer> {
     using Base = SlotMapBase<T, KeyType, ObjectContainer, KeyContainer>;
@@ -371,15 +382,17 @@ class SlotMap: public SlotMapBase<T, KeyType, ObjectContainer, KeyContainer> {
     using Base::m_indices;
     using Base::m_keys;
 
-    using key_view              = decltype(std::declval<const Base*>()->keys());
+    using const_key_view        = decltype(std::declval<const Base*>()->keys());
     using const_value_view      = decltype(std::declval<const Base*>()->values());
     using value_view            = decltype(std::declval<Base*>()->values());
-    static_assert(std::ranges::borrowed_range<key_view>);
+    static_assert(std::ranges::borrowed_range<const_key_view>);
     static_assert(std::ranges::borrowed_range<const_value_view>);
     static_assert(std::ranges::borrowed_range<value_view>);
+    static_assert(std::ranges::random_access_range<const_key_view>);
+    static_assert(std::ranges::random_access_range<const_value_view>);
+    static_assert(std::ranges::random_access_range<value_view>);
 
-    using const_key_iterator    = std::ranges::iterator_t<key_view>;
-    using key_iterator          = std::ranges::iterator_t<key_view>;
+    using const_key_iterator    = std::ranges::iterator_t<const_key_view>;
 
     using const_value_iterator  = std::ranges::iterator_t<const_value_view>;
     using value_iterator        = std::ranges::iterator_t<value_view>;
@@ -394,7 +407,7 @@ public:
     using reference         = T&;
 
     using const_iterator    = ZipIterator<const_key_iterator, const_value_iterator>;
-    using iterator          = ZipIterator<key_iterator, value_iterator>;
+    using iterator          = ZipIterator<const_key_iterator, value_iterator>;
 
     using difference_type   = std::iter_difference_t<iterator>;
     using size_type         = std::make_signed_t<difference_type>;
@@ -466,16 +479,6 @@ private:
     constexpr void erase_impl(index_type erase_obj_idx) noexcept;
     constexpr void erase_index_and_key(index_type erase_obj_idx) noexcept;
 };
-
-namespace Test {
-using VectorIterator = std::vector<int>::iterator;
-using TestIterator = SlotMap<int>::iterator;
-using TestReference = TestIterator::reference;
-static_assert(std::input_iterator<TestIterator>);
-static_assert(std::forward_iterator<TestIterator>);
-static_assert(std::bidirectional_iterator<TestIterator>);
-static_assert(std::random_access_iterator<TestIterator>);
-}
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::reserve(size_type sz)

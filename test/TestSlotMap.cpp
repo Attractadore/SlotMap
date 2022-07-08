@@ -16,6 +16,12 @@ using Vector = std::vector<T>;
 template<typename T>
 using SlotMap = Attractadore::SlotMap<T, unsigned, Vector, Vector>;
 
+using TestIterator = SlotMap<int>::iterator;
+static_assert(std::input_iterator<TestIterator>);
+static_assert(std::forward_iterator<TestIterator>);
+static_assert(std::bidirectional_iterator<TestIterator>);
+static_assert(std::random_access_iterator<TestIterator>);
+
 TEST(TestIsEmpty, Empty) {
     SlotMap<int> s;
     EXPECT_TRUE(s.empty());
