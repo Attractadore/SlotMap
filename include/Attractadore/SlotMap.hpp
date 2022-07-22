@@ -133,7 +133,8 @@ public:
     using rvalue_reference  = cpp23_pair<rvalue_reference1, rvalue_reference2>;
     using value_type        = cpp23_pair<value_type1, value_type2>;
 
-    ZipIterator(Iter1 it1 = {}, Iter2 it2 = {}): it1{it1}, it2{it2} {}
+    constexpr ZipIterator(Iter1 it1 = {}, Iter2 it2 = {}) noexcept:
+        it1{it1}, it2{it2} {}
 
     // InputIterator
 
