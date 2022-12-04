@@ -262,8 +262,8 @@ struct ContainerView: private Container {
     constexpr auto cend() const noexcept { return end(); }
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr auto size() const noexcept { return std::ranges::distance(begin(), end()); }
-    constexpr decltype(auto) operator[](Container::size_type idx) const noexcept { return begin()[idx]; }
-    constexpr decltype(auto) operator[](Container::size_type idx) noexcept { return begin()[idx]; }
+    constexpr decltype(auto) operator[](typename Container::size_type idx) const noexcept { return begin()[idx]; }
+    constexpr decltype(auto) operator[](typename Container::size_type idx) noexcept { return begin()[idx]; }
 };
 
 template<std::unsigned_integral I>
@@ -347,7 +347,7 @@ SLOTMAP_TEMPLATE
 class SlotMapBase {
 protected:
     using key_type      = Key<I>;
-    using index_type    = key_type::idx_type;
+    using index_type    = typename key_type::idx_type;
 
     using ObjC          = O<T>;
     using IdxC          = K<index_type>;
@@ -435,12 +435,41 @@ public:
     constexpr bool empty() const noexcept { return begin() == end(); }
     constexpr size_type size() const noexcept { return std::ranges::distance(begin(), end()); }
     static constexpr size_type max_size() noexcept { return free_list_null - 1; }
+
     constexpr void reserve(size_type sz)
-        requires SlotMapCanReserve<SlotMap>;
+        requires SlotMapCanReserve<SlotMap>
+    {
+        m_objects.reserve(sz);
+        m_indices.reserve(sz);
+        m_keys.reserve(sz);
+    }
+
     constexpr size_type capacity() const noexcept
-        requires SlotMapHasCapacity<SlotMap>;
+        requires SlotMapHasCapacity<SlotMap>
+    {
+        auto cap = max_size();
+        auto obj_cap = m_objects.capacity();
+        if (obj_cap < cap) {
+            cap = obj_cap;
+        }
+        auto idx_cap = m_indices.capacity();
+        if (idx_cap < cap) {
+            cap = idx_cap;
+        }
+        auto key_cap = m_keys.capacity();
+        if (key_cap < cap) {
+            cap = key_cap;
+        }
+        return cap;
+    }
+
     constexpr void shrink_to_fit()
-        requires SlotMapCanShrinkToFit<SlotMap>;
+        requires SlotMapCanShrinkToFit<SlotMap>
+    {
+        m_objects.shrink_to_fit();
+        m_indices.shrink_to_fit();
+        m_keys.shrink_to_fit();
+    }
 
     constexpr void clear() noexcept;
 
@@ -482,44 +511,6 @@ private:
     constexpr void erase_impl(index_type erase_obj_idx) noexcept;
     constexpr void erase_index_and_key(index_type erase_obj_idx) noexcept;
 };
-
-SLOTMAP_TEMPLATE
-constexpr void SLOTMAP::reserve(size_type sz)
-    requires SlotMapCanReserve<SLOTMAP>
-{
-    m_objects.reserve(sz);
-    m_indices.reserve(sz);
-    m_keys.reserve(sz);
-}
-
-SLOTMAP_TEMPLATE
-constexpr auto SLOTMAP::capacity() const noexcept -> size_type
-    requires SlotMapHasCapacity<SLOTMAP>
-{
-    auto cap = max_size();
-    auto obj_cap = m_objects.capacity();
-    if (obj_cap < cap) {
-        cap = obj_cap;
-    }
-    auto idx_cap = m_indices.capacity();
-    if (idx_cap < cap) {
-        cap = idx_cap;
-    }
-    auto key_cap = m_keys.capacity();
-    if (key_cap < cap) {
-        cap = key_cap;
-    }
-    return cap;
-}
-
-SLOTMAP_TEMPLATE
-constexpr void SLOTMAP::shrink_to_fit()
-    requires SlotMapCanShrinkToFit<SLOTMAP>
-{
-    m_objects.shrink_to_fit();
-    m_indices.shrink_to_fit();
-    m_keys.shrink_to_fit();
-}
 
 SLOTMAP_TEMPLATE
 constexpr void SLOTMAP::clear() noexcept {
