@@ -478,7 +478,37 @@ public:
     [[nodiscard]] constexpr key_type insert(value_type&& val)
         requires std::move_constructible<value_type> { return emplace(std::move(val)).key; }
     template<typename... Args> requires std::constructible_from<value_type, Args&&...>
-    [[nodiscard]] constexpr emplace_result emplace(Args&&... args);
+    [[nodiscard]] constexpr emplace_result emplace(Args&&... args) {
+        index_type obj_idx = m_objects.size();
+
+        // Reserve space in key-index map
+        if (m_free_list_head == free_list_null) {
+            index_type free_list_next = m_indices.size();
+            m_indices.emplace_back() =
+                std::exchange(m_free_list_head, free_list_next);
+        }
+
+        // Reserve space in index-key map
+        m_keys.resize(obj_idx + 1);
+
+        auto idx_idx = m_free_list_head;
+        auto free_list_next = m_indices[idx_idx];
+
+        // Insert object into object array
+        auto& ref = m_objects.emplace_back(std::forward<Args>(args)...);
+        // Insert object into index-key map
+        auto key = m_keys.back() = { .idx = idx_idx };
+        // Insert object into key-index map
+        m_indices[idx_idx] = obj_idx;
+        // Update free list
+        m_free_list_head = free_list_next;
+
+        return {
+            .key = key,
+            .ref = ref,
+        };
+    }
+
     constexpr iterator erase(iterator it) noexcept;
     constexpr void erase(key_type k) noexcept { erase_impl(index(k)); }
     constexpr value_type pop(key_type k) noexcept;
@@ -521,40 +551,6 @@ constexpr void SLOTMAP::clear() noexcept {
             std::exchange(m_free_list_head, key.idx);
     }
     m_keys.clear();
-}
-
-SLOTMAP_TEMPLATE
-template<typename... Args>
-    requires std::constructible_from<T, Args&&...>
-constexpr auto SLOTMAP::emplace(Args&&... args) -> emplace_result {
-    index_type obj_idx = m_objects.size();
-
-    // Reserve space in key-index map
-    if (m_free_list_head == free_list_null) {
-        index_type free_list_next = m_indices.size();
-        m_indices.emplace_back() =
-            std::exchange(m_free_list_head, free_list_next);
-    }
-
-    // Reserve space in index-key map
-    m_keys.resize(obj_idx + 1);
-
-    auto idx_idx = m_free_list_head;
-    auto free_list_next = m_indices[idx_idx];
-
-    // Insert object into object array
-    auto& ref = m_objects.emplace_back(std::forward<Args>(args)...);
-    // Insert object into index-key map
-    auto key = m_keys.back() = { .idx = idx_idx };
-    // Insert object into key-index map
-    m_indices[idx_idx] = obj_idx;
-    // Update free list
-    m_free_list_head = free_list_next;
-
-    return {
-        .key = key,
-        .ref = ref,
-    };
 }
 
 SLOTMAP_TEMPLATE
