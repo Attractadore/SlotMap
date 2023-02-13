@@ -257,13 +257,13 @@ class SlotMapKey;
 
 template <typename T, CSlotMapKey K = SlotMapKey,
           template <typename> typename C = detail::StdVector>
-class SlotMap;
+class DenseSlotMap;
 
 #define ATTRACTADORE_DEFINE_SLOTMAP_KEY(NewKey)                                \
   class NewKey {                                                               \
     template <typename T, ::Attractadore::CSlotMapKey K,                       \
               template <typename> typename C>                                  \
-    friend class ::Attractadore::SlotMap;                                      \
+    friend class ::Attractadore::DenseSlotMap;                                 \
     uint32_t slot_index = std::numeric_limits<uint32_t>::max();                \
     uint32_t version = 0;                                                      \
                                                                                \
@@ -292,7 +292,7 @@ namespace detail {
 template <typename Container> struct ContainerView : private Container {
   template <typename T, ::Attractadore::CSlotMapKey K,
             template <typename> typename C>
-  friend class ::Attractadore::SlotMap;
+  friend class ::Attractadore::DenseSlotMap;
 
   using typename Container::const_iterator;
   using typename Container::difference_type;
@@ -377,7 +377,7 @@ template <typename Container> struct ContainerView : private Container {
 } // namespace detail
 
 template <typename T, CSlotMapKey K, template <typename> typename C>
-class SlotMap {
+class DenseSlotMap {
   static constexpr auto NULL_SLOT = std::numeric_limits<uint32_t>::max();
 
   struct Slot {
@@ -625,7 +625,7 @@ public:
     return std::nullopt;
   }
 
-  constexpr void swap(SlotMap &other) noexcept {
+  constexpr void swap(DenseSlotMap &other) noexcept {
     std::ranges::swap(m_keys, other.m_keys);
     std::ranges::swap(m_values, other.m_values);
     std::ranges::swap(m_slots, other.m_slots);
@@ -671,7 +671,7 @@ public:
     return find(k) != end();
   };
 
-  constexpr bool operator==(const SlotMap &other) const noexcept {
+  constexpr bool operator==(const DenseSlotMap &other) const noexcept {
     return this->m_keys == other.m_keys and this->m_values == other.m_values;
   }
 
@@ -707,7 +707,8 @@ private:
 };
 
 template <typename T, CSlotMapKey K, template <typename> typename C>
-constexpr void swap(SlotMap<T, K, C> &l, SlotMap<T, K, C> &r) noexcept {
+constexpr void swap(DenseSlotMap<T, K, C> &l,
+                    DenseSlotMap<T, K, C> &r) noexcept {
   l.swap(r);
 }
 

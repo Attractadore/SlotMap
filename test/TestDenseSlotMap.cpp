@@ -1,4 +1,4 @@
-#include "Attractadore/SlotMap.hpp"
+#include "Attractadore/DenseSlotMap.hpp"
 
 #include <gtest/gtest.h>
 
@@ -17,28 +17,28 @@ std::ostream &operator<<(std::ostream &os, SlotMapKey key) {
 }
 } // namespace Attractadore
 
-using Attractadore::SlotMap;
-template class Attractadore::SlotMap<int>;
+using Attractadore::DenseSlotMap;
+template class Attractadore::DenseSlotMap<int>;
 
-using TestIterator = SlotMap<int>::iterator;
+using TestIterator = DenseSlotMap<int>::iterator;
 static_assert(std::input_iterator<TestIterator>);
 static_assert(std::forward_iterator<TestIterator>);
 static_assert(std::bidirectional_iterator<TestIterator>);
 static_assert(std::random_access_iterator<TestIterator>);
 
 TEST(TestIsEmpty, Empty) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   EXPECT_TRUE(s.empty());
 }
 
 TEST(TestIsEmpty, NotEmpty) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto k = s.insert(1);
   EXPECT_FALSE(s.empty());
 }
 
 TEST(TestSize, InsertAndDelete) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector<decltype(s)::key_type> keys;
   int i = 0;
   for (; i < 16; i++) {
@@ -58,18 +58,18 @@ TEST(TestSize, InsertAndDelete) {
 }
 
 TEST(TestCapacity, Fresh) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   ASSERT_EQ(s.capacity(), 0);
 }
 
 TEST(TestCapacity, AfterReserve) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   s.reserve(10);
   ASSERT_GE(s.capacity(), 10);
 }
 
 TEST(TestCapacity, AfterShrink) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   s.reserve(10);
   auto cnt = s.size();
   s.shrink_to_fit();
@@ -77,7 +77,7 @@ TEST(TestCapacity, AfterShrink) {
 }
 
 TEST(TestClear, Clear) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   for (size_t i = 0; i < 16; i++) {
     auto k = s.insert(i);
   }
@@ -86,7 +86,7 @@ TEST(TestClear, Clear) {
 }
 
 TEST(TestClear, ValueAfterInsertAfterClear) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   for (size_t i = 0; i < 3; i++) {
     auto k = s.insert(i);
   }
@@ -104,7 +104,7 @@ TEST(TestClear, ValueAfterInsertAfterClear) {
 }
 
 TEST(TestInsert, ValueAfterInsert) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   for (auto v : values) {
     auto k = s.insert(v);
@@ -117,7 +117,7 @@ TEST(TestInsert, ValueAfterInsert) {
 }
 
 TEST(TestInsert, ValueAfterAllInsert) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   std::vector<decltype(s)::key_type> keys;
   for (auto v : values) {
@@ -135,7 +135,7 @@ TEST(TestInsert, ValueAfterAllInsert) {
 }
 
 TEST(TestInsert, InsertAfterErase) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto base_k = s.insert(0);
   auto old_k = s.insert(1);
@@ -157,7 +157,7 @@ TEST(TestInsert, InsertAfterErase) {
 }
 
 TEST(TestEmplace, Emplace) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   for (auto v : values) {
     auto &&[k, ref] = *s.emplace(v);
@@ -166,7 +166,7 @@ TEST(TestEmplace, Emplace) {
 }
 
 TEST(TestEmplace, EmplaceAfterErase) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto base_k = s.emplace(0)->first;
   auto old_k = s.emplace(1)->first;
@@ -186,7 +186,7 @@ TEST(TestEmplace, EmplaceAfterErase) {
 }
 
 TEST(TestErase, EraseIterator) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto k = s.insert(0);
   auto it = s.find(k);
@@ -198,7 +198,7 @@ TEST(TestErase, EraseIterator) {
 }
 
 TEST(TestErase, EraseAllIterator) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   for (auto v : values) {
     auto k = s.insert(v);
@@ -210,7 +210,7 @@ TEST(TestErase, EraseAllIterator) {
 }
 
 TEST(TestErase, EraseAllIteratorBackward) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   for (auto v : values) {
     auto k = s.insert(v);
@@ -222,7 +222,7 @@ TEST(TestErase, EraseAllIteratorBackward) {
 }
 
 TEST(TestErase, EraseKey) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto k = s.insert(0);
 
@@ -232,7 +232,7 @@ TEST(TestErase, EraseKey) {
 }
 
 TEST(TestTryErase, TryErase) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto k = s.insert(0);
 
@@ -241,7 +241,7 @@ TEST(TestTryErase, TryErase) {
 }
 
 TEST(TestSwap, Swap) {
-  SlotMap<int> s1, s2;
+  DenseSlotMap<int> s1, s2;
   using key_type = decltype(s1)::key_type;
   std::vector<key_type> keys1;
   std::vector<key_type> keys2;
@@ -269,7 +269,7 @@ TEST(TestSwap, Swap) {
 }
 
 TEST(TestFind, FindPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   auto it = s.find(k);
@@ -278,7 +278,7 @@ TEST(TestFind, FindPresent) {
 }
 
 TEST(TestFind, FindNotPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   s.erase(k);
@@ -287,7 +287,7 @@ TEST(TestFind, FindNotPresent) {
 }
 
 TEST(TestFind, FindAfterClear) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   s.clear();
@@ -296,7 +296,7 @@ TEST(TestFind, FindAfterClear) {
 }
 
 TEST(TestGet, GetPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   auto *ptr = s.get(k);
@@ -305,7 +305,7 @@ TEST(TestGet, GetPresent) {
 }
 
 TEST(TestGet, GetNotPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   s.erase(k);
@@ -314,21 +314,21 @@ TEST(TestGet, GetNotPresent) {
 }
 
 TEST(TestAccess, Access) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   EXPECT_EQ(s[k], val);
 }
 
 TEST(TestContains, ContainsPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   EXPECT_TRUE(s.contains(k));
 }
 
 TEST(TestContains, ContainsNotPresent) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   s.erase(k);
@@ -336,7 +336,7 @@ TEST(TestContains, ContainsNotPresent) {
 }
 
 TEST(TestContains, ContainsAfterClear) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   auto val = 0xffdead;
   auto k = s.insert(val);
   s.clear();
@@ -344,35 +344,35 @@ TEST(TestContains, ContainsAfterClear) {
 }
 
 TEST(TestCompare, Self) {
-  SlotMap<int> s1;
+  DenseSlotMap<int> s1;
   EXPECT_EQ(s1, s1);
 }
 
 TEST(TestCompare, Copy) {
-  SlotMap<int> s1;
+  DenseSlotMap<int> s1;
   auto s2 = s1;
   EXPECT_EQ(s1, s2);
 }
 
 TEST(TestCompare, DifferentEmpty) {
-  SlotMap<int> s1;
-  SlotMap<int> s2;
+  DenseSlotMap<int> s1;
+  DenseSlotMap<int> s2;
   EXPECT_EQ(s1, s2);
 }
 
 TEST(TestCompare, DifferentNotEmpty) {
-  SlotMap<int> s1;
+  DenseSlotMap<int> s1;
   auto k = s1.insert(0);
-  SlotMap<int> s2;
+  DenseSlotMap<int> s2;
   EXPECT_NE(s1, s2);
 }
 
 TEST(TestCompare, DifferentSame) {
-  SlotMap<int> s1;
+  DenseSlotMap<int> s1;
   for (int i = 0; i < 16; i++) {
     auto k = s1.insert(i);
   }
-  SlotMap<int> s2;
+  DenseSlotMap<int> s2;
   for (int i = 0; i < 16; i++) {
     EXPECT_NE(s1, s2);
     auto k = s2.insert(i);
@@ -381,7 +381,7 @@ TEST(TestCompare, DifferentSame) {
 }
 
 TEST(TestPop, Pop) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto k = s.insert(0);
 
@@ -392,7 +392,7 @@ TEST(TestPop, Pop) {
 }
 
 TEST(TestPop, PopAll) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   using Key = decltype(s)::key_type;
 
   std::vector values = {0, 1, 2, 3, 4};
@@ -412,7 +412,7 @@ TEST(TestPop, PopAll) {
 }
 
 TEST(TestTryPop, TryPop) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
 
   auto val = 0;
   auto key = s.insert(val);
@@ -422,7 +422,7 @@ TEST(TestTryPop, TryPop) {
 }
 
 TEST(TestKeysValues, KeysValues) {
-  SlotMap<int> s;
+  DenseSlotMap<int> s;
   std::vector values = {0, 1, 2, 3, 4};
   std::vector<decltype(s)::key_type> keys;
   for (auto v : values) {

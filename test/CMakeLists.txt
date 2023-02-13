@@ -1,9 +1,11 @@
-if (BUILD_TESTING)
+if (NOT BUILD_TESTING)
+  return()
+endif()
+
 find_package(GTest REQUIRED)
 include(GoogleTest)
 
-add_executable(TestSlotMap TestSlotMap.cpp)
-target_link_libraries(TestSlotMap GTest::gtest_main Attractadore::SlotMap)
+add_executable(TestDenseSlotMap TestDenseSlotMap.cpp)
+target_link_libraries(TestDenseSlotMap GTest::gtest_main Attractadore::SlotMap)
 
-gtest_discover_tests(TestSlotMap)
-endif()
+gtest_discover_tests(TestDenseSlotMap)
